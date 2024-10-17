@@ -231,7 +231,7 @@ class StateEstimatorUKF12D(StateEstimatorAbs):
         # UKF update step for pose
         pass
 
-    def process_twist(self, twist: TwistStamped):
+    def process_twist(self, odom: Odometry):
         """
         Handle the receipt of a TwistStamped message from optical flow.
         The message includes:
@@ -241,6 +241,8 @@ class StateEstimatorUKF12D(StateEstimatorAbs):
 
         This method PREDICTS with the most recent control input and UPDATES.
         """
+        twist = odom.twist
+
         if self.in_callback:
             return
         self.in_callback = True

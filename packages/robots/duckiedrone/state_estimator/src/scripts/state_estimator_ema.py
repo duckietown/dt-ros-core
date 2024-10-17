@@ -2,7 +2,8 @@
 
 from math import cos
 from sensor_msgs.msg import Imu, Range
-from geometry_msgs.msg import PoseStamped, TwistStamped
+from geometry_msgs.msg import PoseStamped
+from nav_msgs.msg import Odometry
 from .state_estimator_abs import StateEstimatorAbs
 
 
@@ -42,10 +43,10 @@ class StateEstimatorEMA(StateEstimatorAbs):
         self.state.pose.pose.position.x = smoothed_x
         self.state.pose.pose.position.y = smoothed_y
 
-    def process_twist(self, twist : TwistStamped):
+    def process_twist(self, odom : Odometry):
         """ Filter the twist data using an EMA filter """
         velocity = self.state.twist.twist.linear
-        new_vel = twist.twist.linear
+        new_vel = odom.twist.twist.linear
 
         self.calc_angle_comp_values()  # Assuming this is used to correct the measurements
 

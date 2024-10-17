@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 
-from typing import Type
 
 from duckietown.dtros.dtparam import DTParam, ParamType
 from duckietown.dtros.dtros import DTROS, NodeType
@@ -94,7 +93,7 @@ class StateEstimatorNode(DTROS):
         #############
         rospy.Subscriber('~imu', Imu, self.imu_cb)
         rospy.Subscriber('~range', Range, self.range_cb)
-        rospy.Subscriber('~twist', TwistStamped, self.twist_cb) # Visual odometry (i.e. optical flow)
+        rospy.Subscriber('~twist', Odometry, self.twist_cb) # Visual odometry (i.e. optical flow)
         
         rospy.Subscriber('pose_topic', PoseStamped, self.pose_cb)
         

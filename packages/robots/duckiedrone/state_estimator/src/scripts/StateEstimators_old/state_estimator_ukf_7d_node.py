@@ -84,10 +84,13 @@ class UKFStateEstimator7D(StateEstimatorAbs):
         self.last_measurement_vector[2] = pose_data.pose.position.y
         self.last_measurement_vector[5] = yaw
 
-    def process_twist(self, twist_data : TwistStamped):
+    def process_twist(self, odom : Odometry):
         '''Process incoming twist data.'''
-        self.last_measurement_vector[3] = twist_data.twist.linear.x
-        self.last_measurement_vector[4] = twist_data.twist.linear.y
+        
+        twist = odom.twist
+
+        self.last_measurement_vector[3] = twist.twist.linear.x
+        self.last_measurement_vector[4] = twist.twist.linear.y
 
     def process_range(self, range_data : Range):
         '''Process incoming range data.'''
