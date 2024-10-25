@@ -405,8 +405,8 @@
         <remap from="unicorn_intersection_node/intersection_done" to="intersection_navigation_node/intersection_done"/>
         <remap from="unicorn_intersection_node/turn_id_and_type" to="random_april_tag_turns_node/turn_id_and_type"/>
         <remap from="unicorn_intersection_node/stop_line_reading" to="stop_line_filter_node/stop_line_reading"/>
-        <remap from="unicorn_intersection_node/left_wheel_encoder_node/tick" to="left_wheel_encoder_node/tick"/>
-        <remap from="unicorn_intersection_node/right_wheel_encoder_node/tick" to="right_wheel_encoder_node/tick"/>
+        <remap from="unicorn_intersection_node/left_wheel_encoder_driver_node/tick" to="left_wheel_encoder_driver_node/tick"/>
+        <remap from="unicorn_intersection_node/right_wheel_encoder_driver_node/tick" to="right_wheel_encoder_driver_node/tick"/>
         <include file="$(find unicorn_intersection)/launch/unicorn_intersection_node.launch">
             <arg name="veh" value="$(arg veh)"/>
             <arg name="param_file_name" value="$(arg param_file_name)"/>
