@@ -13,7 +13,7 @@ dt-launchfile-init
 # NOTE: Use `dt-exec COMMAND` to run the main process (blocking process)
 
 # launching app
-dt-exec roslaunch --wait state_estimation state_estimation_node.launch \
+dt-exec roslaunch --wait state_estimator state_estimator_node.launch \
     veh:="${VEHICLE_NAME}"
 
 
