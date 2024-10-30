@@ -152,9 +152,9 @@ class PIDController(DTROS):
     def takeoff_srv(self, req: SetBoolRequest):
         """ Service to switch between flying and not flying """
         if req.data:
-            self.current_mode = 2
+            self.current_mode = DroneMode.FLYING
         else:
-            self.current_mode = 1
+            self.current_mode = DroneMode.ARMED
         return SetBoolResponse(success=True, message="Mode set to %s" % self.current_mode)
     
     def current_state_callback(self, state : Odometry):
@@ -208,10 +208,10 @@ class PIDController(DTROS):
     def current_mode_callback(self, msg : FCUState):
         """ Update the current mode """
         if msg.armed:
-            if self.current_mode == 0:
-                self.current_mode = 1
+            if self.current_mode == DroneMode.DISARMED:
+                self.current_mode = DroneMode.ARMED
         else:
-            self.current_mode = 0
+            self.current_mode = DroneMode.DISARMED
         self.loginfo(f"Current mode set to: {self.current_mode}")
 
     def position_control_callback(self, msg):
