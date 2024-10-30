@@ -153,7 +153,7 @@ class PIDController(DTROS):
 
         # TODO: transform reset_transform and position_control switch into services
         rospy.Subscriber("reset_transform", Empty, self.reset_callback, queue_size=1)
-        rospy.Subscriber("position_control", Bool, self.position_control_callback, queue_size=1)
+        rospy.Subscriber("~position_control", Bool, self.position_control_callback, queue_size=1)
 
         rospy.Service("~takeoff", SetBool, self.takeoff_srv)
 
