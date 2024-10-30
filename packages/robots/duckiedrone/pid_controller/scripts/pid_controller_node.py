@@ -29,7 +29,7 @@ class PIDController(DTROS):
     def __init__(self):
         super(PIDController, self).__init__(node_name="pid_controller_node",
                                             node_type=NodeType.CONTROL)
-        # set max range for time of flight
+        
         self.frequency = rospy.get_param("~frequency")
         self.max_height = rospy.get_param("~max_height")
         self.hover_height = rospy.get_param("~hover_height")
@@ -41,19 +41,14 @@ class PIDController(DTROS):
         self.position_control = False
         self.last_position_control = False
 
-        # Initialize the current and desired positions
         self.current_position = Position()
         self.desired_position = Position(z=self.hover_height)
         self.last_desired_position = self.desired_position
 
-        # Initialize the position error
-        self.position_error = Error(0, 0, 0)
-
-        # Initialize the current and desired velocities
         self.current_velocity = Velocity()
         self.desired_velocity = Velocity()
 
-        # Initialize the velocity error
+        self.position_error = Error()
         self.velocity_error = Error()
 
         # Set the distance that a velocity command will move the drone (m)
@@ -69,11 +64,9 @@ class PIDController(DTROS):
         self.desired_velocity_start_time = None
         self.desired_yaw_velocity_start_time = None
 
-        # Initialize the primary PID
-        self.pid = PID()
-
-        # Initialize the error used for the PID which is vx, vy, z where vx and
+        # Primary PID: the error used for the PID which is vx, vy, z where vx and
         # vy are velocities, and z is the error in the altitude of the drone
+        self.pid = PID()
         self.pid_error = Error()
 
         # Initialize the 'position error to velocity error' PIDs:
@@ -86,22 +79,19 @@ class PIDController(DTROS):
         # Initialize the pose callback time
         self.last_pose_time = None
 
-        # Initialize the desired yaw velocity
         self.desired_yaw_velocity = 0
 
-        # Initialize the current and  previous roll, pitch, yaw values
         self.current_rpy = RPY()
         self.previous_rpy = RPY()
 
-        # initialize the current and previous states
         self.current_state = Odometry()
         self.previous_state = Odometry()
 
-        # a variable used to determine if the drone is moving between desired positions
+        # Used to determine if the drone is moving between desired positions
         self.moving = False
 
-        # a variable that determines the maximum magnitude of the position error
-        # any greater position error will overide the drone into velocity control
+        # Determines the maximum acceptable position error magnitude, an error
+        # greater than this value will overide the drone into velocity control
         self.safety_threshold = 1.5
 
         # determines if the position of the drone is known
@@ -144,7 +134,6 @@ class PIDController(DTROS):
             latch=True
         )
 
-        # subscribers
         rospy.Subscriber("~mode", FCUState, self.current_mode_callback, queue_size=1)
         rospy.Subscriber("~state", Odometry, self.current_state_callback, queue_size=1)
         # TODO: refactor callbacks
@@ -155,14 +144,11 @@ class PIDController(DTROS):
         # TODO: transform reset_transform and position_control switch into services
         rospy.Subscriber("reset_transform", Empty, self.reset_callback, queue_size=1)
         rospy.Subscriber("~position_control", Bool, self.position_control_callback, queue_size=1)
-
         rospy.Service("~takeoff", SetBool, self.takeoff_srv)
 
         # publish internal desired pose (hover pose)
         self._desired_height_pub.publish(Float32(self.desired_position.z))
 
-    # ROS SERVICES CALLBACK METHODS
-    #################################
     def takeoff_srv(self, req: SetBoolRequest):
         """ Service to switch between flying and not flying """
         if req.data:
@@ -171,8 +157,6 @@ class PIDController(DTROS):
             self.current_mode = 1
         return SetBoolResponse(success=True, message="Mode set to %s" % self.current_mode)
     
-    # ROS SUBSCRIBER CALLBACK METHODS
-    #################################
     def current_state_callback(self, state : Odometry):
         """ Store the drone's current state for calculations """
         self.previous_state = self.current_state
@@ -187,11 +171,9 @@ class PIDController(DTROS):
 
         # --- set internal desired pose equal to the desired pose ros message ---
 
-        # ABSOLUTE desired x, y, z
         if self.absolute_desired_position:
             self.desired_position.x = msg.position.x
             self.desired_position.y = msg.position.y
-            # the desired z must be above 0 and below the range of the ir sensor (.55meters)
             self.desired_position.z = msg.position.z if 0 <= msg.position.z <= self.max_height * 0.8 else self.last_desired_position.z
 
         # RELATIVE desired x, y to the CURRENT pose, but
@@ -208,7 +190,7 @@ class PIDController(DTROS):
             # desired pose changed, the drone should move
             self.moving = True
             rospy.loginfo('moving')
-        # publish target height
+        
         self._desired_height_pub.publish(self.desired_position.z)
 
     def desired_twist_callback(self, msg):
@@ -225,7 +207,6 @@ class PIDController(DTROS):
 
     def current_mode_callback(self, msg : FCUState):
         """ Update the current mode """
-        # DISARMED -> ARMED
         if msg.armed:
             if self.current_mode == 0:
                 self.current_mode = 1
@@ -375,7 +356,6 @@ class PIDController(DTROS):
         distance for a desired velocity
         """
         if self.desired_velocity.magnitude() > 0:
-            # tiime = distance / velocity
             travel_time = self.desired_velocity_travel_distance / self.desired_velocity.planar_magnitude()
         else:
             travel_time = 0.0
@@ -384,15 +364,15 @@ class PIDController(DTROS):
     def reset(self):
         """ Set desired_position to be current position on `xy` and hover_height on `z`, set
         filtered_desired_velocity to be zero, and reset both the PositionPID
-        and VelocityPID
+        and VelocityPID.
         """
-        # reset position control variables
+
         self.position_error = Error(0, 0, 0)
         self.desired_position = Position(self.current_position.x, self.current_position.y, self.hover_height)
-        # reset velocity control_variables
+        
         self.velocity_error = Error(0, 0, 0)
         self.desired_velocity = Velocity(0, 0, 0)
-        # reset the pids
+
         self.pid.reset()
         self.lr_pid.reset()
         self.fb_pid.reset()
