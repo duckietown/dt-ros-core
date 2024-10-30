@@ -423,8 +423,7 @@ def main(controller : PIDController):
     # create the PIDController object
     pid : PIDController = controller
 
-    # set the loop rate (Hz)
-    loop_rate = rospy.Rate(pid.frequency)
+    control_loop_rate = rospy.Rate(pid.frequency)
     rospy.loginfo('PID Controller Started')
 
     while not pid.is_shutdown and pid.safety_check():
@@ -510,7 +509,7 @@ def main(controller : PIDController):
                 "\t Y ", str(error.y)[:5]
             )
         # ---
-        loop_rate.sleep()
+        control_loop_rate.sleep()
 
 
 if __name__ == '__main__':
