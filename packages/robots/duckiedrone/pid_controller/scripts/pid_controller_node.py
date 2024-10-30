@@ -355,9 +355,10 @@ class PIDController(DTROS):
         self.pid_error.z = dz
         # multiply by 100 to account for the fact that code was originally written using cm
         self.pid_error = self.pid_error * 100 # TODO: remove magic constants
+        
+        self.position_error = self.desired_position - self.current_position
+        
         if self.position_control:
-            # calculate the position error
-            self.position_error = self.desired_position - self.current_position
             # calculate a value to add to the velocity error based based on the
             # position error in the x (roll) direction
             lr_step = self.lr_pid.step(self.position_error.x, pose_dt)
