@@ -8,15 +8,15 @@ from .state_estimator_abs import StateEstimatorAbs
 
 
 class StateEstimatorEMA(StateEstimatorAbs):
-    ''' A class for filtering data using an Exponential Moving Average (EMA) '''
+    """A class for filtering data using an Exponential Moving Average (EMA)"""
 
-    def __init__(self):
+    def __init__(self, alpha_pose: float, alpha_twist: float, alpha_range: float):
         super().__init__()
 
         # TODO: These should be params
-        self.alpha_pose = 0.2  # Smoothing factor for pose
-        self.alpha_twist = 0.4  # Smoothing factor for twist
-        self.alpha_range = 0.8  # Smoothing factor for range
+        self.alpha_pose = alpha_pose  # Smoothing factor for pose
+        self.alpha_twist = alpha_twist  # Smoothing factor for twist
+        self.alpha_range = alpha_range  # Smoothing factor for range
         self.max_range = 5.0    # Example maximum range, should be set appropriately
 
         # Initialize the estimator

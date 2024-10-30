@@ -86,7 +86,7 @@ class StateEstimatorNode(DTROS):
 
         self.primary_estimator = DTParam("~primary", param_type=ParamType.STRING, default=primary)
         self.other_estimators = DTParam("~others", param_type=ParamType.LIST, default=others or [])
-        
+        self.ema_params = DTParam("~ema_params", param_type=ParamType.DICT, default={})
         self._state_estimator = self.get_state_estimator() # type: ignore
 
         # Subscribers
@@ -138,8 +138,14 @@ class StateEstimatorNode(DTROS):
             raise ValueError(f"Invalid state estimator class: {self.primary_estimator.value}")
         
         self.loginfo(f"Using {self.primary_estimator.value} as the primary state estimator.")
-        
-        # Return the instantiated class
+
+        if state_estimator_class == StateEstimatorEMA:
+            return StateEstimatorEMA(
+                alpha_pose=self.ema_params.value["alpha_pose"],
+                alpha_twist=self.ema_params.value["alpha_twist"],
+                alpha_range=self.ema_params.value["alpha_range"],
+            )
+
         return state_estimator_class()
  
     def state_callback(self):
