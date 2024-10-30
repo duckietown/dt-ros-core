@@ -2,6 +2,7 @@
 
 
 from enum import IntEnum
+from typing import List
 import rospy
 import tf
 from duckietown_msgs.msg import DroneControl as RC
