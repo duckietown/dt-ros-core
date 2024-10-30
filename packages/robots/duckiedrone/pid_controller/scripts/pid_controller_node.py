@@ -377,13 +377,20 @@ class PIDController(DTROS):
         self.lr_pid.reset()
         self.fb_pid.reset()
 
-    def publish_cmd(self, cmd, debug : bool = False):
-        """ Publish the controls """
-        msg = RC()
-        msg.roll = cmd[0]
-        msg.pitch = cmd[1]
-        msg.yaw = cmd[2]
-        msg.throttle = cmd[3]
+    def publish_control_cmd(self, cmd : List[int], debug : bool = False):
+        """ Publish the control commands to the drone.
+
+        Args:
+            cmd (List[int]): [roll, pitch, yaw, throttle] commands for the drone.
+            debug (bool, optional): Publish to debug topic. Defaults to False.
+        """
+        msg = RC(
+            roll=cmd[0],
+            pitch=cmd[1],
+            yaw=cmd[2],
+            throttle=cmd[3],
+        )
+
         if debug:
             self.cmd_debug.publish(msg)
             return
@@ -447,7 +454,7 @@ def main(controller : PIDController):
 
         elif pid.previous_mode == DroneMode.FLYING:
             if pid.current_mode == DroneMode.FLYING:
-                pid.publish_cmd(fly_command)
+                pid.publish_control_cmd(fly_command)
 
             elif pid.current_mode == DroneMode.DISARMED:
                 pid.log_mode_transition()
@@ -472,7 +479,7 @@ def main(controller : PIDController):
         # - publish these to a diagnostic topic
         # - add pid output to the diagnostic topic
         if verbose >= 2:
-                pid.publish_cmd(fly_command, debug=True)
+                pid.publish_control_cmd(fly_command, debug=True)
 
                 if pid.position_control:
                     rospy.loginfo('\n'
