@@ -92,7 +92,7 @@ class PID:
 
     def __init__(self,
                  roll=PIDaxis(
-                     2.0, 1.0, 0.0,
+                     4.0, 1.0, 0.0,
                      control_range=(1400, 1600),
                      midpoint=1500,
                      i_range=(-100, 100)
@@ -105,7 +105,7 @@ class PID:
                  ),
 
                  pitch=PIDaxis(
-                     2.0, 1.0, 0.0,
+                     4.0, 1.0, 0.0,
                      control_range=(1400, 1600),
                      midpoint=1500,
                      i_range=(-100, 100)
@@ -130,7 +130,7 @@ class PID:
                      i_range=(-400, 400),
                      control_range=(1200, 1500),
                      d_range=(-40, 40),
-                     midpoint=1350
+                     midpoint=1500
                  ),
                  ):
         self.trim_controller_cap_plane = 0.05
