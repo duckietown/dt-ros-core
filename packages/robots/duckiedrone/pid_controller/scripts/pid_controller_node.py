@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 
+from enum import IntEnum
 import rospy
 import tf
 from duckietown_msgs.msg import DroneControl as RC
@@ -14,6 +15,10 @@ from duckietown.dtros import DTROS, NodeType
 from pid_class import PID, PIDaxis
 from three_dim_vec import Position, Velocity, Error, RPY
 
+class DroneMode(IntEnum):
+    DISARMED = 0
+    ARMED = 1
+    FLYING = 2
 
 class PIDController(DTROS):
     """
@@ -29,9 +34,8 @@ class PIDController(DTROS):
         self.max_height = rospy.get_param("~max_height")
         self.hover_height = rospy.get_param("~hover_height")
 
-        # Initialize the current and desired modes (initialized both to DISARMED)
-        self.previous_mode = 0
-        self.current_mode = 0
+        self.previous_mode = DroneMode.DISARMED
+        self.current_mode = DroneMode.DISARMED
 
         # Initialize in velocity control
         self.position_control = False
@@ -406,6 +410,24 @@ class PIDController(DTROS):
 
         self.cmd_pub.publish(msg)
 
+    def log_mode_transition(self):
+        """
+        Method that logs the transition between two flight modes.
+        """
+        self.loginfo(f"Transitioned from {self.previous_mode} to {self.current_mode}")
+
+    def safety_check(self):
+        """
+        Method that checks if the drone is within the specified maximum height.
+        """
+        if self.current_state.pose.pose.position.z > self.max_height:
+            self.loginfo("\n disarming because drone is too high \n")
+            self.previous_mode = DroneMode.DISARMED
+            self.current_mode = DroneMode.DISARMED
+            return False
+        
+        return True
+
 def main(controller : PIDController):
     # Verbosity between 0 and 2, 2 is most verbose
     verbose = 2
@@ -417,53 +439,44 @@ def main(controller : PIDController):
     loop_rate = rospy.Rate(pid.frequency)
     rospy.loginfo('PID Controller Started')
 
-    while not pid.is_shutdown:
+    while not pid.is_shutdown and pid.safety_check():
         pid.heartbeat_pub.publish(Empty())
 
-        # Steps the PID. If we are not flying, this can be used to
+        # If we are not flying, this can be used to
         # examine the behavior of the PID based on published values
         fly_command = pid.step()
 
-        # reset the pids after arming and start up in velocity control
-        if pid.previous_mode == 0:  # 'DISARMED'
-            if pid.current_mode == 1:  # 'ARMED'
+        if pid.previous_mode == DroneMode.DISARMED:
+            if pid.current_mode == DroneMode.ARMED:
                 pid.reset()
                 pid.position_control_pub.publish(False)
-                # ---
-                pid.loginfo("Detected state change: DISARMED -> ARMED")
+                
+                pid.log_mode_transition()
                 pid.previous_mode = pid.current_mode
 
-        # reset the pids right before flying
-        if pid.previous_mode == 1:  # 'ARMED'
-            if pid.current_mode == 2:  # 'FLYING'
+        if pid.previous_mode == DroneMode.ARMED:
+            if pid.current_mode == DroneMode.FLYING:
                 pid.reset()
-                # ---
-                pid.loginfo("Detected state change: ARMED -> FLYING")
+                
+                pid.log_mode_transition()
                 pid.previous_mode = pid.current_mode
 
-            elif pid.current_mode == 0:
-                # ---
-                pid.loginfo("Detected state change: ARMED -> DISARMED")
+            elif pid.current_mode == DroneMode.DISARMED:
+                pid.log_mode_transition()
                 pid.previous_mode = pid.current_mode
 
-        # if the drone is flying, send the fly_command
-        elif pid.previous_mode == 2:  # 'FLYING'
-            if pid.current_mode == 2:  # 'FLYING'
-                # Safety check to ensure drone does not fly too high height_safety_here
-                if pid.current_state.pose.pose.position.z > pid.max_height:
-                    pid.loginfo("\n disarming because drone is too high \n")
-                    pid.previous_mode = 0
-                    pid.current_mode = 0
-                    break
-                # Publish the ouput of pid step method
+        elif pid.previous_mode == DroneMode.FLYING:
+            if pid.current_mode == DroneMode.FLYING:
                 pid.publish_cmd(fly_command)
 
-            # after flying, take the converged low i terms and set these as the
-            # initial values, this allows the drone to "learn" and get steadier
-            # with each flight until it converges
-            # NOTE: do not store the throttle_low.init_i or else the drone will
-            # take off abruptly after the first flight
-            elif pid.current_mode == 0:  # 'DISARMED'
+            elif pid.current_mode == DroneMode.DISARMED:
+                pid.log_mode_transition()
+                pid.previous_mode = pid.current_mode
+
+
+                # after flying, take the converged low i terms and set these as the
+                # initial values, this allows the drone to "learn" and get steadier
+                # with each flight until it converges
                 pid.pid.roll_low.init_i = pid.pid.roll_low.integral
                 pid.pid.pitch_low.init_i = pid.pid.pitch_low.integral
                 # Uncomment below statements to print the converged values.
@@ -471,9 +484,9 @@ def main(controller : PIDController):
                 if verbose >= 2:
                     pid.logdebug(f'roll_low.init_i {pid.pid.roll_low.init_i}')
                     pid.logdebug(f'pitch_low.init_i {pid.pid.pitch_low.init_i}')
-                # ---
-                pid.loginfo("Detected state change: FLYING -> DISARMED")
-                pid.previous_mode = pid.current_mode
+                # NOTE: do not store the throttle_low.init_i or else the drone will
+                # take off abruptly after the first flight
+                
 
         # TODO: improve diagnostics:
         # - publish these to a diagnostic topic
