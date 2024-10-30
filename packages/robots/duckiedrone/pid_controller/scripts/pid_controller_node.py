@@ -120,6 +120,12 @@ class PIDController(DTROS):
             RC,
             queue_size=1
         )
+        self.cmd_debug = rospy.Publisher(
+            "~debug/commands",
+            RC,
+            queue_size=1
+        )
+
         self.position_control_pub = rospy.Publisher(
             "~position_control",
             Bool,
@@ -389,13 +395,17 @@ class PIDController(DTROS):
         self.lr_pid.reset()
         self.fb_pid.reset()
 
-    def publish_cmd(self, cmd):
+    def publish_cmd(self, cmd, debug : bool = False):
         """ Publish the controls """
         msg = RC()
         msg.roll = cmd[0]
         msg.pitch = cmd[1]
         msg.yaw = cmd[2]
         msg.throttle = cmd[3]
+        if debug:
+            self.cmd_debug.publish(msg)
+            return
+
         self.cmd_pub.publish(msg)
 
 def main(controller : PIDController):
@@ -471,6 +481,8 @@ def main(controller : PIDController):
         # - publish these to a diagnostic topic
         # - add pid output to the diagnostic topic
         if verbose >= 2:
+                pid.publish_cmd(fly_command, debug=True)
+
                 if pid.position_control:
                     rospy.loginfo('\n'
                         f'current position: {pid.current_position},\n '
