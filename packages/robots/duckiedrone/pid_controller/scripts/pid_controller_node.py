@@ -1,13 +1,10 @@
 #!/usr/bin/env python3
 
-import signal
 
 import rospy
-import sys
 import tf
 from duckietown_msgs.msg import DroneControl as RC
 from mavros_msgs.msg import State as FCUState
-from duckietown_msgs.msg import DroneMode as Mode
 from geometry_msgs.msg import Pose, Twist
 from nav_msgs.msg import Odometry
 from std_msgs.msg import Empty, Bool, Float32
