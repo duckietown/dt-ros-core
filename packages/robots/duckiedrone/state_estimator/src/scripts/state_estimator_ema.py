@@ -17,7 +17,6 @@ class StateEstimatorEMA(StateEstimatorAbs):
         self.alpha_pose = alpha_pose  # Smoothing factor for pose
         self.alpha_twist = alpha_twist  # Smoothing factor for twist
         self.alpha_range = alpha_range  # Smoothing factor for range
-        self.max_range = 5.0    # Example maximum range, should be set appropriately
 
         # Initialize the estimator
         self.initialize_estimator()
@@ -62,7 +61,7 @@ class StateEstimatorEMA(StateEstimatorAbs):
         prev_altitude = self.state.pose.pose.position.z
 
         smoothed_altitude = (1.0 - self.alpha_range) * curr_altitude + self.alpha_range * prev_altitude
-        smoothed_altitude = max(0, min(smoothed_altitude, self.max_range * 0.8))
+        smoothed_altitude = max(0, smoothed_altitude)
 
         self.state.pose.pose.position.z = smoothed_altitude
 
