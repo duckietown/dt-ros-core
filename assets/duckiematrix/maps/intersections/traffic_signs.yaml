@@ -1,0 +1,101 @@
+version: 1.0
+traffic_signs:
+  map_0/sign_stop_26:
+    id: 1
+    type: sign_stop
+    family: 36h11
+  map_0/sign_stop_27:
+    id: 1
+    type: sign_stop
+    family: 36h11
+  map_0/sign_stop_28:
+    id: 1
+    type: sign_stop
+    family: 36h11
+  map_0/sign_right_T_intersect_132:
+    id: 9
+    type: sign_right_T_intersect
+    family: 36h11
+  map_0/sign_left_T_intersect_970:
+    id: 10
+    type: sign_left_T_intersect
+    family: 36h11
+  map_0/sign_T_intersect_461:
+    id: 11
+    type: sign_T_intersect
+    family: 36h11
+
+  map_0/sign_stop_29:
+    id: 1
+    type: sign_stop
+    family: 36h11
+  map_0/sign_stop_30:
+    id: 1
+    type: sign_stop
+    family: 36h11
+  map_0/sign_stop_31:
+    id: 1
+    type: sign_stop
+    family: 36h11
+  map_0/sign_right_T_intersect_133:
+    id: 9
+    type: sign_right_T_intersect
+    family: 36h11
+  map_0/sign_left_T_intersect_971:
+    id: 10
+    type: sign_left_T_intersect
+    family: 36h11
+  map_0/sign_T_intersect_462:
+    id: 11
+    type: sign_T_intersect
+    family: 36h11
+
+  map_0/sign_stop_32:
+    id: 1
+    type: sign_stop
+    family: 36h11
+  map_0/sign_stop_33:
+    id: 1
+    type: sign_stop
+    family: 36h11
+  map_0/sign_stop_34:
+    id: 1
+    type: sign_stop
+    family: 36h11
+  map_0/sign_right_T_intersect_134:
+    id: 9
+    type: sign_right_T_intersect
+    family: 36h11
+  map_0/sign_left_T_intersect_972:
+    id: 10
+    type: sign_left_T_intersect
+    family: 36h11
+  map_0/sign_T_intersect_463:
+    id: 11
+    type: sign_T_intersect
+    family: 36h11
+
+  map_0/sign_stop_35:
+    id: 1
+    type: sign_stop
+    family: 36h11
+  map_0/sign_stop_36:
+    id: 1
+    type: sign_stop
+    family: 36h11
+  map_0/sign_stop_37:
+    id: 1
+    type: sign_stop
+    family: 36h11
+  map_0/sign_right_T_intersect_135:
+    id: 9
+    type: sign_right_T_intersect
+    family: 36h11
+  map_0/sign_left_T_intersect_973:
+    id: 10
+    type: sign_left_T_intersect
+    family: 36h11
+  map_0/sign_T_intersect_464:
+    id: 11
+    type: sign_T_intersect
+    family: 36h11

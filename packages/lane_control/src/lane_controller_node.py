@@ -218,8 +218,10 @@ class LaneControllerNode(DTROS):
 
             # We cap the error if it grows too large
             if np.abs(d_err) > self.params["~d_thres"]:
-                self.log("d_err too large, thresholding it!", "error")
                 d_err = np.sign(d_err) * self.params["~d_thres"]
+
+            if phi_err > self.params["~theta_thres_max"].value or phi_err < self.params["~theta_thres_min"].value:
+                phi_err = np.maximum(self.params["~theta_thres_min"].value, np.minimum(phi_err, self.params["~theta_thres_max"].value))
 
             wheels_cmd_exec = [self.wheels_cmd_executed.vel_left, self.wheels_cmd_executed.vel_right]
             if self.obstacle_stop_line_detected:

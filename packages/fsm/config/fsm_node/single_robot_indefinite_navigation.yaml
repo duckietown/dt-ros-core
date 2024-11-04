@@ -1,0 +1,133 @@
+# Initial state of the FSM
+
+initial_state: "NORMAL_JOYSTICK_CONTROL"
+
+events: # Maps from subscribing topic to signal ids
+  joystick_override_on:
+    topic: "joy_mapper_node/joystick_override"
+    msg_type: "BoolStamped"
+    trigger: True
+  joystick_override_off:
+    topic: "joy_mapper_node/joystick_override"
+    msg_type: "BoolStamped"
+    trigger: False
+  at_stop_line:
+    topic: "stop_line_filter_node/at_stop_line"
+    msg_type: "BoolStamped"
+    trigger: True
+  stop_sign_detected:
+    topic: "intersection_type_detector_node/stop_sign_intersection_detected"
+    msg_type: "BoolStamped"
+    trigger: True
+  traffic_light_detected:
+    topic: "intersection_type_detector_node/traffic_light_intersection_detected"
+    msg_type: "BoolStamped"
+    trigger: True
+  stop_sign_intersection_go:
+    topic: "random_april_tag_turns_node/intersection_go"
+    msg_type: "BoolStamped"
+    trigger: True
+  traffic_light_intersection_go:
+    topic: "communication_node/intersection_go"
+    msg_type: "BoolStamped"
+    trigger: True
+  intersection_done: ## closed loop new
+    topic: "intersection_navigation_node/intersection_done"
+    msg_type: "BoolStamped"
+    trigger: True
+
+# Define nodes
+nodes:
+  anti_instagram: "anti_instagram_node/switch"
+  apriltag_detector_node: "apriltag_detector_node/switch"
+  apriltag_postprocessing_node: "apriltag_postprocessing_node/switch"
+  led_emitter_node: "led_emitter_node/switch"
+  led_detector_node: "led_detector_node/switch"
+  line_detector_node: "line_detector_node/switch"
+  lane_filter_node: "lane_filter_node/switch"
+  stop_line_filter_node: "stop_line_filter_node/switch"
+  coordinator_node: "coordinator_node/switch"
+  unicorn_intersection_node: "unicorn_intersection_node/switch" #NOTE a.k.a. semi closed loop intersection navigation
+  lane_controller_node: "lane_controller_node/switch"
+  random_april_tag_turns_node: "random_april_tag_turns_node/switch"
+  intersection_type_detector_node: "intersection_type_detector_node/switch"
+  decoder_node: "decoder_node/switch"
+  rectifier_node: "rectifier_node/switch"
+
+
+# Define state transitions
+
+global_transitions:
+  joystick_override_on: "NORMAL_JOYSTICK_CONTROL"
+
+states:
+  NORMAL_JOYSTICK_CONTROL:
+    transitions:
+      joystick_override_off: "LANE_FOLLOWING"
+    active_nodes:
+      - lane_filter_node
+      - line_detector_node
+      - stop_line_filter_node
+      - ground_projection_node
+      - anti_instagram
+#      - apriltag_detector_node
+#      - apriltag_postprocessing_node
+    lights: "GREEN"
+
+  LANE_FOLLOWING:
+    transitions:
+      at_stop_line: "DETECT_INTERSECTION_TYPE"
+    active_nodes:
+      - anti_instagram
+      - line_detector_node
+      - ground_projection_node
+      - lane_filter_node
+      - lane_controller_node
+      - stop_line_filter_node
+      - unicorn_intersection_node
+    lights: "RED"
+
+  DETECT_INTERSECTION_TYPE:
+    transitions:
+      stop_sign_detected: "STOP_SIGN_INTERSECTION"
+      traffic_light_detected: "TRAFFIC_LIGHT_INTERSECTION"
+    active_nodes:
+      - anti_instagram
+      - apriltag_detector_node
+      - apriltag_postprocessing_node
+      - intersection_type_detector_node
+      - unicorn_intersection_node
+    lights: "YELLOW"
+
+  STOP_SIGN_INTERSECTION:
+    transitions:
+      stop_sign_intersection_go: "INTERSECTION_CONTROL"
+    active_nodes:
+      - anti_instagram
+      - apriltag_detector_node
+      - apriltag_postprocessing_node
+      - random_april_tag_turns_node
+      - unicorn_intersection_node
+    lights: "WHITE"
+
+  TRAFFIC_LIGHT_INTERSECTION:
+    transitions:
+      traffic_light_intersection_go: "INTERSECTION_CONTROL"
+    active_nodes:
+      - apriltag_detector_node
+      - lane_filter_node
+      - lane_controller_node
+      - led_detector_node
+      - coordinator_node
+    lights: "WHITE"
+
+
+  INTERSECTION_CONTROL:
+    transitions:
+      intersection_done: "LANE_FOLLOWING"
+    active_nodes:
+      - line_detector_node
+      - lane_filter_node
+      - lane_controller_node
+      - unicorn_intersection_node
+      - random_april_tag_turns_node
