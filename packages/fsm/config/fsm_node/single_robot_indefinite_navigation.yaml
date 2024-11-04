@@ -131,4 +131,3 @@ states:
       - lane_controller_node
       - unicorn_intersection_node
       - random_april_tag_turns_node
-      - stop_line_filter_node
