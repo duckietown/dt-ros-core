@@ -16,17 +16,17 @@ class OpticalFlowNode(DTROS):
     """
     This node receives the motion vectors from the optical flow algorithm, sends them to be projected to the ground plane,
     and computes the velocity vector from the resulting projected motion vectors.
-    
+
     Publishers:
         - ~visual_odometry (nav_msgs/Odometry): Estimated velocity vector from the optical flow algorithm, using the projected motion vectors.
         - ~lineseglist_out (duckietown_msgs/SegmentList): The motion vectors as SegmentList
         - ~debug/raw_odometry (nav_msgs/Odometry): The raw odometry vector computed on the un-projected motion vectors
-        
+
     Subscribers:
         - ~motion_vectors (opencv_apps/FlowArrayStamped): The motion vectors from the optical flow algorithm
         - ~range (sensor_msgs/Range): The range from the range sensor
         - ~projected_motion_vectors (duckietown_msgs/SegmentList): The projected motion vectors from the ground projector.
-        
+
     """
 
     def __init__(self, node_name):
@@ -41,6 +41,7 @@ class OpticalFlowNode(DTROS):
 
         # TODO: Retrieve the resize scale from the ROS parameter server
         self.resize_scale = 0.0625  # rospy.get_param("~resized/scale_width")
+        self.flow_scale = DTParam("~flow_scale", 0.95, param_type=ParamType.FLOAT) # Scales the optical flow from pixels to meters
 
         # obj attrs
         self.bridge = CvBridge()
@@ -48,7 +49,7 @@ class OpticalFlowNode(DTROS):
 
         self._camera_info_initialized = False
 
-        self._range: float = 0.0
+        self._range: float = 1.0
         self._scale: float = self._range / self.base_homography_height.value
 
         self.pub_odometry = rospy.Publisher("~visual_odometry", Odometry, queue_size=1)
@@ -107,10 +108,10 @@ class OpticalFlowNode(DTROS):
             odometry_msg.child_frame_id = "camera"
             odometry_msg.twist.twist.linear.x = np.mean(
                 [flow.velocity.x for flow in msg.flow]
-            )
+            ) * self.flow_scale.value * self._range
             odometry_msg.twist.twist.linear.y = np.mean(
                 [flow.velocity.y for flow in msg.flow]
-            )
+            ) * self.flow_scale.value * self._range
 
             self.pub_debug_raw_odometry.publish(odometry_msg)
 
