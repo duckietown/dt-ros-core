@@ -10,6 +10,7 @@ from geometry_msgs.msg import Pose, Twist
 from nav_msgs.msg import Odometry
 from std_msgs.msg import Empty, Bool, Float32
 from std_srvs.srv import SetBool, SetBoolResponse, SetBoolRequest
+from duckietown_msgs.msg import PIDDiagnostics as PIDDebugInfo
 
 from duckietown.dtros import DTROS, NodeType
 from pid_class import PID, PIDaxis
@@ -71,7 +72,7 @@ class PIDController(DTROS):
 
         # Initialize the error used for the PID which is vx, vy, z where vx and
         # vy are velocities, and z is the error in the altitude of the drone
-        self.pid_error = Error()
+        self.pid_error : Error = Error()
 
         # Initialize the 'position error to velocity error' PIDs:
         # TODO: read the PID gains from a config file and allow them to be set via parameter server or a service
@@ -118,11 +119,7 @@ class PIDController(DTROS):
             RC,
             queue_size=1
         )
-        self.cmd_debug = rospy.Publisher(
-            "~debug/commands",
-            RC,
-            queue_size=1
-        )
+        self.debug_pub = rospy.Publisher("~debug/pid", PIDDebugInfo, queue_size=10)
 
         self.position_control_pub = rospy.Publisher(
             "~position_control",
@@ -268,7 +265,12 @@ class PIDController(DTROS):
         if self.desired_velocity.magnitude() > 0 or abs(self.desired_yaw_velocity) > 0:
             self.adjust_desired_velocity()
 
-        return self.pid.step(self.pid_error, self.desired_yaw_velocity)
+        control_command = self.pid.step(self.pid_error, self.desired_yaw_velocity)
+
+        if self.debug_pub.get_num_connections() > 0:
+            self._publish_debug_info(control_command)
+
+        return control_command
 
     # HELPER METHODS
     ################
@@ -394,18 +396,34 @@ class PIDController(DTROS):
         self.lr_pid.reset()
         self.fb_pid.reset()
 
-    def publish_cmd(self, cmd, debug : bool = False):
+    def publish_cmd(self, cmd):
         """ Publish the controls """
         msg = RC()
         msg.roll = cmd[0]
         msg.pitch = cmd[1]
         msg.yaw = cmd[2]
         msg.throttle = cmd[3]
-        if debug:
-            self.cmd_debug.publish(msg)
-            return
 
         self.cmd_pub.publish(msg)
+        
+    def _publish_debug_info(self, control_command : List[int]):
+        """
+        Method publishing debug info to  the debug topic.
+        """
+        debug_info = PIDDebugInfo(
+            current_position=self.current_position.as_ros_vector3(),
+            desired_position=self.desired_position.as_ros_vector3(),
+            position_error=self.position_error.as_ros_vector3(),
+            current_velocity=self.current_velocity.as_ros_vector3(),
+            desired_velocity=self.desired_velocity.as_ros_vector3(),  
+            velocity_error=self.velocity_error.as_ros_vector3(),    
+            pid_error=self.pid_error.as_ros_vector3(),
+            fly_command=RC(*control_command),
+            throttle_integral=self.pid.throttle.integral
+        )
+        
+        self.debug_pub.publish(debug_info)
+
 
 def main(controller : PIDController):
     # Verbosity between 0 and 2, 2 is most verbose
@@ -474,42 +492,8 @@ def main(controller : PIDController):
                     pid.logdebug(f'pitch_low.init_i {pid.pid.pitch_low.init_i}')
                 # ---
                 pid.loginfo("Detected state change: FLYING -> DISARMED")
-                pid.previous_mode = pid.current_mode
+                pid.previous_mode = pid.current_mode            
 
-        # TODO: improve diagnostics:
-        # - publish these to a diagnostic topic
-        # - add pid output to the diagnostic topic
-        if verbose >= 2:
-                pid.publish_cmd(fly_command, debug=True)
-
-                if pid.position_control:
-                    rospy.loginfo('\n'
-                        f'current position: {pid.current_position},\n '
-                        f'desired position: {pid.desired_position},\n '
-                        f'position error: {pid.position_error},\n '
-                        f'pid_error: {pid.pid_error},\n '
-                        f'r,p,y,t: {fly_command},\n '
-                        f'throttle._i: {pid.pid.throttle.integral}'
-                    )
-                else:
-                    rospy.loginfo('\n'
-                        f'current velocity: {pid.current_velocity},\n '
-                        f'desired velocity: {pid.desired_velocity},\n '
-                        f'velocity error: {pid.velocity_error},\n '
-                        f'pid_error: {pid.pid_error},\n '
-                        f'r,p,y,t: {fly_command},\n '
-                        f'throttle._i: {pid.pid.throttle.integral}'
-                    )
-
-        if verbose >= 1:
-            error = pid.pid_error
-            rospy.logdebug(
-                "Errors (mm):",
-                "\t Z: ", str(error.z)[:5],
-                "\t X ", str(error.x)[:5],
-                "\t Y ", str(error.y)[:5]
-            )
-        # ---
         loop_rate.sleep()
 
 
