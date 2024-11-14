@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 
+from enum import IntEnum
 from typing import List
 import rospy
 import tf
@@ -15,6 +16,10 @@ from duckietown.dtros import DTROS, NodeType
 from pid_class import PID, PIDaxis
 from three_dim_vec import Position, Velocity, Error, RPY
 
+class DroneMode(IntEnum):
+    DISARMED = 0
+    ARMED = 1
+    FLYING = 2
 
 class PIDController(DTROS):
     """
@@ -25,32 +30,26 @@ class PIDController(DTROS):
     def __init__(self):
         super(PIDController, self).__init__(node_name="pid_controller_node",
                                             node_type=NodeType.CONTROL)
-        # set max range for time of flight
+        
         self.frequency = rospy.get_param("~frequency")
         self.max_height = rospy.get_param("~max_height")
         self.hover_height = rospy.get_param("~hover_height")
 
-        # Initialize the current and desired modes (initialized both to DISARMED)
-        self.previous_mode = 0
-        self.current_mode = 0
+        self.previous_mode = DroneMode.DISARMED
+        self.current_mode = DroneMode.DISARMED
 
         # Initialize in velocity control
         self.position_control = False
         self.last_position_control = False
 
-        # Initialize the current and desired positions
         self.current_position = Position()
         self.desired_position = Position(z=self.hover_height)
         self.last_desired_position = self.desired_position
 
-        # Initialize the position error
-        self.position_error = Error(0, 0, 0)
-
-        # Initialize the current and desired velocities
         self.current_velocity = Velocity()
         self.desired_velocity = Velocity()
 
-        # Initialize the velocity error
+        self.position_error = Error()
         self.velocity_error = Error()
 
         # Set the distance that a velocity command will move the drone (m)
@@ -66,11 +65,9 @@ class PIDController(DTROS):
         self.desired_velocity_start_time = None
         self.desired_yaw_velocity_start_time = None
 
-        # Initialize the primary PID
-        self.pid = PID()
-
-        # Initialize the error used for the PID which is vx, vy, z where vx and
+        # Primary PID: the error used for the PID which is vx, vy, z where vx and
         # vy are velocities, and z is the error in the altitude of the drone
+        self.pid = PID()
         self.pid_error = Error()
 
         # Initialize the 'position error to velocity error' PIDs:
@@ -83,22 +80,19 @@ class PIDController(DTROS):
         # Initialize the pose callback time
         self.last_pose_time = None
 
-        # Initialize the desired yaw velocity
         self.desired_yaw_velocity = 0
 
-        # Initialize the current and  previous roll, pitch, yaw values
         self.current_rpy = RPY()
         self.previous_rpy = RPY()
 
-        # initialize the current and previous states
         self.current_state = Odometry()
         self.previous_state = Odometry()
 
-        # a variable used to determine if the drone is moving between desired positions
+        # Used to determine if the drone is moving between desired positions
         self.moving = False
 
-        # a variable that determines the maximum magnitude of the position error
-        # any greater position error will overide the drone into velocity control
+        # Determines the maximum acceptable position error magnitude, an error
+        # greater than this value will overide the drone into velocity control
         self.safety_threshold = 1.5
 
         # determines if the position of the drone is known
@@ -141,7 +135,6 @@ class PIDController(DTROS):
             latch=True
         )
 
-        # subscribers
         rospy.Subscriber("~mode", FCUState, self.current_mode_callback, queue_size=1)
         rospy.Subscriber("~state", Odometry, self.current_state_callback, queue_size=1)
         # TODO: refactor callbacks
@@ -152,24 +145,19 @@ class PIDController(DTROS):
         # TODO: transform reset_transform and position_control switch into services
         rospy.Subscriber("reset_transform", Empty, self.reset_callback, queue_size=1)
         rospy.Subscriber("~position_control", Bool, self.position_control_callback, queue_size=1)
-
         rospy.Service("~takeoff", SetBool, self.takeoff_srv)
 
         # publish internal desired pose (hover pose)
         self._desired_height_pub.publish(Float32(self.desired_position.z))
 
-    # ROS SERVICES CALLBACK METHODS
-    #################################
     def takeoff_srv(self, req: SetBoolRequest):
         """ Service to switch between flying and not flying """
         if req.data:
-            self.current_mode = 2
+            self.current_mode = DroneMode.FLYING
         else:
-            self.current_mode = 1
+            self.current_mode = DroneMode.ARMED
         return SetBoolResponse(success=True, message="Mode set to %s" % self.current_mode)
     
-    # ROS SUBSCRIBER CALLBACK METHODS
-    #################################
     def current_state_callback(self, state : Odometry):
         """ Store the drone's current state for calculations """
         self.previous_state = self.current_state
@@ -184,11 +172,9 @@ class PIDController(DTROS):
 
         # --- set internal desired pose equal to the desired pose ros message ---
 
-        # ABSOLUTE desired x, y, z
         if self.absolute_desired_position:
             self.desired_position.x = msg.position.x
             self.desired_position.y = msg.position.y
-            # the desired z must be above 0 and below the range of the ir sensor (.55meters)
             self.desired_position.z = msg.position.z if 0 <= msg.position.z <= self.max_height * 0.8 else self.last_desired_position.z
 
         # RELATIVE desired x, y to the CURRENT pose, but
@@ -205,7 +191,7 @@ class PIDController(DTROS):
             # desired pose changed, the drone should move
             self.moving = True
             rospy.loginfo('moving')
-        # publish target height
+        
         self._desired_height_pub.publish(self.desired_position.z)
 
     def desired_twist_callback(self, msg):
@@ -222,12 +208,11 @@ class PIDController(DTROS):
 
     def current_mode_callback(self, msg : FCUState):
         """ Update the current mode """
-        # DISARMED -> ARMED
         if msg.armed:
-            if self.current_mode == 0:
-                self.current_mode = 1
+            if self.current_mode == DroneMode.DISARMED:
+                self.current_mode = DroneMode.ARMED
         else:
-            self.current_mode = 0
+            self.current_mode = DroneMode.DISARMED
         self.loginfo(f"Current mode set to: {self.current_mode}")
 
     def position_control_callback(self, msg):
@@ -372,7 +357,6 @@ class PIDController(DTROS):
         distance for a desired velocity
         """
         if self.desired_velocity.magnitude() > 0:
-            # tiime = distance / velocity
             travel_time = self.desired_velocity_travel_distance / self.desired_velocity.planar_magnitude()
         else:
             travel_time = 0.0
@@ -381,31 +365,56 @@ class PIDController(DTROS):
     def reset(self):
         """ Set desired_position to be current position on `xy` and hover_height on `z`, set
         filtered_desired_velocity to be zero, and reset both the PositionPID
-        and VelocityPID
+        and VelocityPID.
         """
-        # reset position control variables
+
         self.position_error = Error(0, 0, 0)
         self.desired_position = Position(self.current_position.x, self.current_position.y, self.hover_height)
-        # reset velocity control_variables
+        
         self.velocity_error = Error(0, 0, 0)
         self.desired_velocity = Velocity(0, 0, 0)
-        # reset the pids
+
         self.pid.reset()
         self.lr_pid.reset()
         self.fb_pid.reset()
 
-    def publish_cmd(self, cmd, debug : bool = False):
-        """ Publish the controls """
-        msg = RC()
-        msg.roll = cmd[0]
-        msg.pitch = cmd[1]
-        msg.yaw = cmd[2]
-        msg.throttle = cmd[3]
+    def publish_control_cmd(self, cmd : List[int], debug : bool = False):
+        """ Publish the control commands to the drone.
+
+        Args:
+            cmd (List[int]): [roll, pitch, yaw, throttle] commands for the drone.
+            debug (bool, optional): Publish to debug topic. Defaults to False.
+        """
+        msg = RC(
+            roll=cmd[0],
+            pitch=cmd[1],
+            yaw=cmd[2],
+            throttle=cmd[3],
+        )
+
         if debug:
             self.cmd_debug.publish(msg)
             return
 
         self.cmd_pub.publish(msg)
+
+    def log_mode_transition(self):
+        """
+        Method that logs the transition between two flight modes.
+        """
+        self.loginfo(f"Transitioned from {self.previous_mode} to {self.current_mode}")
+
+    def safety_check(self):
+        """
+        Method that checks if the drone is within the specified maximum height.
+        """
+        if self.current_state.pose.pose.position.z > self.max_height:
+            self.loginfo("\n disarming because drone is too high \n")
+            self.previous_mode = DroneMode.DISARMED
+            self.current_mode = DroneMode.DISARMED
+            return False
+        
+        return True
 
 def main(controller : PIDController):
     # Verbosity between 0 and 2, 2 is most verbose
@@ -414,57 +423,47 @@ def main(controller : PIDController):
     # create the PIDController object
     pid : PIDController = controller
 
-    # set the loop rate (Hz)
-    loop_rate = rospy.Rate(pid.frequency)
+    control_loop_rate = rospy.Rate(pid.frequency)
     rospy.loginfo('PID Controller Started')
 
-    while not pid.is_shutdown:
+    while not pid.is_shutdown and pid.safety_check():
         pid.heartbeat_pub.publish(Empty())
 
-        # Steps the PID. If we are not flying, this can be used to
+        # If we are not flying, this can be used to
         # examine the behavior of the PID based on published values
         fly_command = pid.step()
 
-        # reset the pids after arming and start up in velocity control
-        if pid.previous_mode == 0:  # 'DISARMED'
-            if pid.current_mode == 1:  # 'ARMED'
+        if pid.previous_mode == DroneMode.DISARMED:
+            if pid.current_mode == DroneMode.ARMED:
                 pid.reset()
                 pid.position_control_pub.publish(False)
-                # ---
-                pid.loginfo("Detected state change: DISARMED -> ARMED")
+                
+                pid.log_mode_transition()
                 pid.previous_mode = pid.current_mode
 
-        # reset the pids right before flying
-        if pid.previous_mode == 1:  # 'ARMED'
-            if pid.current_mode == 2:  # 'FLYING'
+        if pid.previous_mode == DroneMode.ARMED:
+            if pid.current_mode == DroneMode.FLYING:
                 pid.reset()
-                # ---
-                pid.loginfo("Detected state change: ARMED -> FLYING")
+                
+                pid.log_mode_transition()
                 pid.previous_mode = pid.current_mode
 
-            elif pid.current_mode == 0:
-                # ---
-                pid.loginfo("Detected state change: ARMED -> DISARMED")
+            elif pid.current_mode == DroneMode.DISARMED:
+                pid.log_mode_transition()
                 pid.previous_mode = pid.current_mode
 
-        # if the drone is flying, send the fly_command
-        elif pid.previous_mode == 2:  # 'FLYING'
-            if pid.current_mode == 2:  # 'FLYING'
-                # Safety check to ensure drone does not fly too high height_safety_here
-                if pid.current_state.pose.pose.position.z > pid.max_height:
-                    pid.loginfo("\n disarming because drone is too high \n")
-                    pid.previous_mode = 0
-                    pid.current_mode = 0
-                    break
-                # Publish the ouput of pid step method
-                pid.publish_cmd(fly_command)
+        elif pid.previous_mode == DroneMode.FLYING:
+            if pid.current_mode == DroneMode.FLYING:
+                pid.publish_control_cmd(fly_command)
 
-            # after flying, take the converged low i terms and set these as the
-            # initial values, this allows the drone to "learn" and get steadier
-            # with each flight until it converges
-            # NOTE: do not store the throttle_low.init_i or else the drone will
-            # take off abruptly after the first flight
-            elif pid.current_mode == 0:  # 'DISARMED'
+            elif pid.current_mode == DroneMode.DISARMED:
+                pid.log_mode_transition()
+                pid.previous_mode = pid.current_mode
+
+
+                # after flying, take the converged low i terms and set these as the
+                # initial values, this allows the drone to "learn" and get steadier
+                # with each flight until it converges
                 pid.pid.roll_low.init_i = pid.pid.roll_low.integral
                 pid.pid.pitch_low.init_i = pid.pid.pitch_low.integral
                 # Uncomment below statements to print the converged values.
@@ -472,15 +471,15 @@ def main(controller : PIDController):
                 if verbose >= 2:
                     pid.logdebug(f'roll_low.init_i {pid.pid.roll_low.init_i}')
                     pid.logdebug(f'pitch_low.init_i {pid.pid.pitch_low.init_i}')
-                # ---
-                pid.loginfo("Detected state change: FLYING -> DISARMED")
-                pid.previous_mode = pid.current_mode
+                # NOTE: do not store the throttle_low.init_i or else the drone will
+                # take off abruptly after the first flight
+                
 
         # TODO: improve diagnostics:
         # - publish these to a diagnostic topic
         # - add pid output to the diagnostic topic
         if verbose >= 2:
-                pid.publish_cmd(fly_command, debug=True)
+                pid.publish_control_cmd(fly_command, debug=True)
 
                 if pid.position_control:
                     rospy.loginfo('\n'
@@ -510,7 +509,7 @@ def main(controller : PIDController):
                 "\t Y ", str(error.y)[:5]
             )
         # ---
-        loop_rate.sleep()
+        control_loop_rate.sleep()
 
 
 if __name__ == '__main__':
