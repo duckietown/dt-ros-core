@@ -345,6 +345,7 @@
 
         <!--<remap from="led_pattern_switch_node/change_color_pattern" to="led_emitter_node/set_pattern" />-->
         <group if="$(arg /LED/emitter)">
+            <remap from="led_emitter_node/led_pattern" to="led_driver_node/led_pattern"/>
             <include file="$(find led_emitter)/launch/led_emitter_node.launch">
                 <arg name="veh" value="$(arg veh)"/>
             </include>
