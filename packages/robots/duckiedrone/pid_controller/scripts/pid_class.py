@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 import logging
-from typing import Optional
+from typing import List, Optional
 import rospy
 
 
@@ -50,7 +50,7 @@ class PIDaxis:
         self._dd = 0
         self._ddd = 0
 
-    def step(self, err, time_elapsed) -> float:
+    def step(self, err, time_elapsed) -> int:
         if time_elapsed == 0:
             return 0
 
@@ -82,7 +82,7 @@ class PIDaxis:
         raw_output = self._p + self.integral + self._d
         output = min(max(raw_output + self.midpoint, self.control_range[0]), self.control_range[1])
 
-        return output
+        return int(output)
 
 
 # noinspection DuplicatedCode
@@ -169,7 +169,7 @@ class PID:
         self.pitch_low.reset()
         self.throttle.reset()
 
-    def step(self, error, cmd_yaw_velocity=0):
+    def step(self, error, cmd_yaw_velocity=0) -> List[int]:
         """ Compute the control variables from the error using the step methods
         of each axis pid.
         """
@@ -212,7 +212,14 @@ class PID:
         )
         return [cmd_r, cmd_p, cmd_y, cmd_t]
 
-    def compute_axis_command(self, error : float, time_elapsed : float, pid : PIDaxis, pid_low : Optional[PIDaxis] = None, trim_controller : float = 5):
+    def compute_axis_command(
+        self,
+        error: float,
+        time_elapsed: float,
+        pid: PIDaxis,
+        pid_low: Optional[PIDaxis] = None,
+        trim_controller: float = 5,
+    ) -> int:
         if pid_low is None:
             cmd_r = pid.step(error, time_elapsed)
             return cmd_r

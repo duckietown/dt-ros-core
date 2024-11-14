@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 
+from typing import List
 import rospy
 import tf
 from duckietown_msgs.msg import DroneControl as RC
