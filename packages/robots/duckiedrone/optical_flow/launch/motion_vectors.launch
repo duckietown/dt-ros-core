@@ -6,26 +6,26 @@
 <arg name="output_image_topic" default="$(arg input_image_topic)/image_raw"/>
 <arg name="camera_info_topic" default="$(arg input_image_topic)/camera_info"/>
 
-    <!-- Raw image publisher -->
+    <!-- Convert input compressed image to raw image -->
     <node pkg="image_transport" type="republish" name="republish_node" output="screen" args="compressed in:=$(arg input_image_topic) raw out:=$(arg output_image_topic)">
     </node>
 
-
-    <!-- Crop image -->
+    <!-- Binning and ROI selection of the image -->
     <node name="resized" pkg="nodelet" type="nodelet"
-        args="standalone image_proc/resize"
+        args="standalone image_proc/crop_decimate"
         output="screen">
 
-        <!-- remap input topics -->
-        <remap from="image" to="$(arg output_image_topic)" />
-        <remap from="camera_info" to="$(arg camera_info_topic)" />
-    
-        <param name="scale_width" value="0.0625" />
-        <param name="scale_height" value="0.0625" />
+        <remap from="camera/image_raw" to="$(arg output_image_topic)" />
+        <remap from="camera/camera_info" to="$(arg camera_info_topic)" /> 
+        <param name="decimation_x" value="8" />
+        <param name="decimation_y" value="8" />
+        <param name="y_offset" value="320" />
+        <param name="height" value="320" />
+        <param name="width" value="480" />
     </node>
 
     <node pkg="opencv_apps" type="fback_flow" name="fback_flow_node">
-        <remap from="camera/camera_info" to="resized/camera_info" />
-        <remap from="image" to="resized/image" />
+        <remap from="camera/camera_info" to="camera_out/camera_info" />
+        <remap from="image" to="camera_out/image_raw" />
     </node>
 </launch>

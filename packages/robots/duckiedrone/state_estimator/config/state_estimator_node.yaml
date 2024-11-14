@@ -30,5 +30,7 @@ student_ukf: False  # Default: False
 # IR sensor variance for 1D simulation
 ir_var: 0.0  # Default: None
 
-# Frequency to run the predict-update loop of the UKF
-loop_hz: 30.0  # Default: 30.0
+ema_params:
+  alpha_pose: 0.2
+  alpha_twist: 0.1
+  alpha_range: 0.8

@@ -6,7 +6,7 @@
     <arg name="pkg_name" value="state_estimator"/>
     <group ns="$(arg veh)">
         <remap from="~imu" to="imu_node/data"/>
-        <remap from="~twist" to="optical_flow_node/visual_odometry"/>
+        <remap from="~twist" to="optical_flow_node/debug/raw_odometry"/>
         <remap from="~range" to="bottom_tof_driver_node/range"/>
         <node pkg="$(arg pkg_name)" type="state_estimator_node.py" name="state_estimator_node" output="screen"></node>
     </group>
