@@ -3,3 +3,4 @@ track_len: 10
 detect_interval: 5
 img_scale: 1.0
 base_homography_height : 0.063
+flow_scale: 0.90
