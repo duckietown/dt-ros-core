@@ -5,7 +5,7 @@ from sensor_msgs.msg import Imu, Range
 from geometry_msgs.msg import PoseStamped
 from nav_msgs.msg import Odometry
 from .state_estimator_abs import StateEstimatorAbs
-
+from tf.transformations import euler_from_quaternion
 
 class StateEstimatorEMA(StateEstimatorAbs):
     """A class for filtering data using an Exponential Moving Average (EMA)"""
@@ -17,6 +17,10 @@ class StateEstimatorEMA(StateEstimatorAbs):
         self.alpha_pose = alpha_pose  # Smoothing factor for pose
         self.alpha_twist = alpha_twist  # Smoothing factor for twist
         self.alpha_range = alpha_range  # Smoothing factor for range
+        
+        self.roll = 0.0
+        self.pitch = 0.0
+        self.yaw = 0.0
 
         # Initialize the estimator
         self.initialize_estimator()
@@ -56,8 +60,7 @@ class StateEstimatorEMA(StateEstimatorAbs):
 
     def process_range(self, range_reading : Range):
         """ Filter the range data using an EMA filter """
-        r, p, _ = self.get_r_p_y()
-        curr_altitude = range_reading.range * cos(r) * cos(p)
+        curr_altitude = range_reading.range * cos(self.roll) * cos(self.pitch)
         prev_altitude = self.state.pose.pose.position.z
 
         smoothed_altitude = (1.0 - self.alpha_range) * curr_altitude + self.alpha_range * prev_altitude
@@ -77,12 +80,17 @@ class StateEstimatorEMA(StateEstimatorAbs):
         """ Helper function to zero out small values for numerical stability. """
         return value if abs(value) > epsilon else 0.0
 
-    @staticmethod
-    def get_r_p_y():
-        # TODO: implement this method so that we can drop the altitude node
-        """ Extract roll, pitch, yaw from the current state (dummy implementation). """
-        # This method would need to be implemented to extract the correct roll, pitch, and yaw values
-        return 0.0, 0.0, 0.0
-
     def process_imu(self, imu_data: Imu):
-        return super().process_imu(imu_data)
+        super().process_imu(imu_data)
+        (
+            self.roll,
+            self.pitch,
+            self.yaw,
+        ) = euler_from_quaternion(
+            [
+                imu_data.orientation.x,
+                imu_data.orientation.y,
+                imu_data.orientation.z,
+                imu_data.orientation.w,
+            ]
+        )
