@@ -17,13 +17,23 @@ class StateEstimatorEMA(StateEstimatorAbs):
         self.alpha_pose = alpha_pose  # Smoothing factor for pose
         self.alpha_twist = alpha_twist  # Smoothing factor for twist
         self.alpha_range = alpha_range  # Smoothing factor for range
-        
-        self.roll = 0.0
-        self.pitch = 0.0
-        self.yaw = 0.0
 
         # Initialize the estimator
         self.initialize_estimator()
+
+    @property
+    def rpy(self):
+        """
+        Get the roll, pitch, and yaw angles from the state. [radians]
+        """
+        return euler_from_quaternion(
+            [
+                self.state.pose.pose.orientation.x,
+                self.state.pose.pose.orientation.y,
+                self.state.pose.pose.orientation.z,
+                self.state.pose.pose.orientation.w,
+            ]
+        )
 
     def initialize_estimator(self):
         """ Initialize the EMA estimator parameters. """
@@ -60,7 +70,9 @@ class StateEstimatorEMA(StateEstimatorAbs):
 
     def process_range(self, range_reading : Range):
         """ Filter the range data using an EMA filter """
-        curr_altitude = range_reading.range * cos(self.roll) * cos(self.pitch)
+        r, p, _ = self.rpy
+
+        curr_altitude = range_reading.range * cos(r) * cos(p)
         prev_altitude = self.state.pose.pose.position.z
 
         smoothed_altitude = (1.0 - self.alpha_range) * curr_altitude + self.alpha_range * prev_altitude
@@ -81,16 +93,8 @@ class StateEstimatorEMA(StateEstimatorAbs):
         return value if abs(value) > epsilon else 0.0
 
     def process_imu(self, imu_data: Imu):
+        """
+        The IMU data is transformed into Euler angles and stored in the state.
+        """
         super().process_imu(imu_data)
-        (
-            self.roll,
-            self.pitch,
-            self.yaw,
-        ) = euler_from_quaternion(
-            [
-                imu_data.orientation.x,
-                imu_data.orientation.y,
-                imu_data.orientation.z,
-                imu_data.orientation.w,
-            ]
-        )
+        self.state.pose.pose.orientation = imu_data.orientation
