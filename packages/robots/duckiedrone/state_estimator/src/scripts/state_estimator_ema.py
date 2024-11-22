@@ -5,7 +5,7 @@ from sensor_msgs.msg import Imu, Range
 from geometry_msgs.msg import PoseStamped
 from nav_msgs.msg import Odometry
 from .state_estimator_abs import StateEstimatorAbs
-
+from tf.transformations import euler_from_quaternion
 
 class StateEstimatorEMA(StateEstimatorAbs):
     """A class for filtering data using an Exponential Moving Average (EMA)"""
@@ -20,6 +20,20 @@ class StateEstimatorEMA(StateEstimatorAbs):
 
         # Initialize the estimator
         self.initialize_estimator()
+
+    @property
+    def rpy(self):
+        """
+        Get the roll, pitch, and yaw angles from the state. [radians]
+        """
+        return euler_from_quaternion(
+            [
+                self.state.pose.pose.orientation.x,
+                self.state.pose.pose.orientation.y,
+                self.state.pose.pose.orientation.z,
+                self.state.pose.pose.orientation.w,
+            ]
+        )
 
     def initialize_estimator(self):
         """ Initialize the EMA estimator parameters. """
@@ -56,7 +70,8 @@ class StateEstimatorEMA(StateEstimatorAbs):
 
     def process_range(self, range_reading : Range):
         """ Filter the range data using an EMA filter """
-        r, p, _ = self.get_r_p_y()
+        r, p, _ = self.rpy
+
         curr_altitude = range_reading.range * cos(r) * cos(p)
         prev_altitude = self.state.pose.pose.position.z
 
@@ -77,12 +92,9 @@ class StateEstimatorEMA(StateEstimatorAbs):
         """ Helper function to zero out small values for numerical stability. """
         return value if abs(value) > epsilon else 0.0
 
-    @staticmethod
-    def get_r_p_y():
-        # TODO: implement this method so that we can drop the altitude node
-        """ Extract roll, pitch, yaw from the current state (dummy implementation). """
-        # This method would need to be implemented to extract the correct roll, pitch, and yaw values
-        return 0.0, 0.0, 0.0
-
     def process_imu(self, imu_data: Imu):
-        return super().process_imu(imu_data)
+        """
+        The IMU data is transformed into Euler angles and stored in the state.
+        """
+        super().process_imu(imu_data)
+        self.state.pose.pose.orientation = imu_data.orientation
