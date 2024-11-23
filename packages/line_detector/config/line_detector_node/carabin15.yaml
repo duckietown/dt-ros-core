@@ -11,7 +11,7 @@ colors:
     low: [0,0,150]
     high: [180,100,255]
   YELLOW:
-    low: [25,80,50]
+    low: [15,80,50]
     high: [45,255,255]
 
 line_detector_parameters:
