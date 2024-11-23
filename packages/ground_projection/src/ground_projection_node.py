@@ -201,7 +201,7 @@ class GroundProjectionNode(DTROS):
         if self.camera_info_received:
             seglist_out = SegmentList()
             seglist_out.header = seglist_msg.header
-            colored_segments = {(255, 255, 255): []}
+            colored_segments = {(255, 255, 255): [], (0,255,255): [], (255,0,0):[]}
 
             for received_segment in seglist_msg.segments:
                 received_segment: Segment
@@ -215,7 +215,14 @@ class GroundProjectionNode(DTROS):
                 projected_segment.color = received_segment.color
                 # TODO what about normal?
                 seglist_out.segments.append(projected_segment)
-                colored_segments[(255,255,255)].append((projected_segment.points[0], projected_segment.points[1]))
+
+                if projected_segment.color == 0:
+                    color_vect = (255,255,255)
+                elif projected_segment.color == 1:
+                    color_vect = (0, 255, 255)
+                else:
+                    color_vect = (255, 0, 0)
+                colored_segments[color_vect].append((projected_segment.points[0], projected_segment.points[1]))
             self.pub_lineseglist.publish(seglist_out)
 
             if not self._first_processing_done:
@@ -225,7 +232,7 @@ class GroundProjectionNode(DTROS):
             if self.pub_debug_road_view_img.get_num_connections() > 0:
                 #return  # TODO: Reimplement using debug_image from dt_computer_vision
                 debug_image_msg = self.bridge.cv2_to_compressed_imgmsg(
-                    debug_image(colored_segments,(300, 300), grid_size=6, s_segment_thickness=2)
+                    debug_image(colored_segments,(300, 300), grid_size=6, s_segment_thickness=5)
                 )
                 debug_image_msg.header = seglist_out.header
                 self.pub_debug_road_view_img.publish(debug_image_msg)
