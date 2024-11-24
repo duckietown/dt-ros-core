@@ -19,7 +19,7 @@ dt-apriltags==3.1.7
 
 duckietown-utils-ente==7.0.0
 
-lib-dt-computer-vision==0.1.13
-lib-dt-state-estimation==0.0.6
+lib-dt-computer-vision==0.1.9
+lib-dt-state-estimation==0.0.9
 lib-dt-modeling==0.0.5
 lib-dt-motion-planning==0.0.1
