@@ -54,7 +54,7 @@ class LaneControllerNode(DTROS):
         super(LaneControllerNode, self).__init__(
             node_name=node_name,
             node_type=NodeType.PERCEPTION,
-            fsm_controlled=True
+            fsm_controlled=False
         )
 
         # Add the node parameters to the parameters dictionary
