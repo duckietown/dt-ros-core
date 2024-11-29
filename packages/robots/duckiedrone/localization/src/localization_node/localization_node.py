@@ -22,8 +22,8 @@ MAP_REAL_HEIGHT = 1.07
 
 # ---------- camera parameters ----------- #
 # (TODO: These should be retrieved from the ~camera_info topic )
-CAMERA_WIDTH = 640
-CAMERA_HEIGHT = 480
+CAMERA_WIDTH = 480
+CAMERA_HEIGHT = 640
 METER_TO_PIXEL = (
     float(MAP_PIXEL_WIDTH) / MAP_REAL_WIDTH + float(MAP_PIXEL_HEIGHT) / MAP_REAL_HEIGHT
 ) / 2.0

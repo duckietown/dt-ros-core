@@ -91,6 +91,15 @@
             "arguments": [
                 "veh:=${env:VEHICLE_NAME}",
             ]
+        },        
+        {
+            "name": "SLAM Node",
+            "type": "ros",
+            "request": "launch",
+            "target": "/code/src/dt-core/packages/robots/duckiedrone/slam/launch/slam_node.launch",
+            "arguments": [
+                "veh:=${env:VEHICLE_NAME}",
+            ]
         },
     ]
 }

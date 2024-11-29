@@ -1,0 +1,19 @@
+<launch>
+    <arg name="veh" doc="Name of vehicle. ex: megaman"/>
+    <arg name="param_file_name" default="default" doc="Specify a param file. ex:megaman"/>
+    <arg name="pkg_name" value="slam"/>
+    <arg name="node_name" default="slam_node"/>
+
+
+    <group ns="$(arg veh)">
+        <!-- PubSub -->
+        <remap from="~image" to="camera_node/image/compressed"/>
+        <remap from="~state" to="state_estimator_node/state"/>
+
+        <!-- Node and param -->
+        <node  name="slam_node" pkg="$(arg pkg_name)" type="$(arg node_name).py" output="screen">
+            <!-- Params -->
+            <rosparam command="load" file="$(find slam)/config/$(arg node_name)/$(arg param_file_name).yaml"/>
+        </node>
+    </group>
+</launch>
