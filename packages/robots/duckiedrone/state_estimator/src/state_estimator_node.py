@@ -93,7 +93,7 @@ class StateEstimatorNode(DTROS):
         #############
         rospy.Subscriber('~imu', Imu, self.imu_cb)
         rospy.Subscriber('~range', Range, self.range_cb)
-        rospy.Subscriber('~twist', Odometry, self.twist_cb) # Visual odometry (i.e. optical flow)
+        rospy.Subscriber('~twist', Odometry, self.twist_cb)
         
         rospy.Subscriber('pose_topic', PoseStamped, self.pose_cb)
         
