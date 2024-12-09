@@ -30,7 +30,6 @@ student_ukf: False  # Default: False
 # IR sensor variance for 1D simulation
 ir_var: 0.0  # Default: None
 
-ema_params:
-  alpha_pose: 0.2
-  alpha_twist: 0.1
-  alpha_range: 0.1
+ema_alpha_pose: 0.2
+ema_alpha_twist: 0.1
+ema_alpha_range: 0.1

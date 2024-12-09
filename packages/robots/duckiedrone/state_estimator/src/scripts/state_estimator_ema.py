@@ -47,11 +47,11 @@ class StateEstimatorEMA(StateEstimatorAbs):
 
     def process_pose(self, pose : PoseStamped):
         """ Filter the pose data using an EMA filter """
-        last_position = self.state.pose.pose.position
+        previous_position = self.state.pose.pose.position
         position_reading = pose.pose.position
 
-        smoothed_x = (1.0 - self.alpha_pose) * last_position.x + self.alpha_pose * position_reading.x
-        smoothed_y = (1.0 - self.alpha_pose) * last_position.y + self.alpha_pose * position_reading.y
+        smoothed_x = (1.0 - self.alpha_pose) * previous_position.x + self.alpha_pose * position_reading.x
+        smoothed_y = (1.0 - self.alpha_pose) * previous_position.y + self.alpha_pose * position_reading.y
 
         self.state.pose.pose.position.x = smoothed_x
         self.state.pose.pose.position.y = smoothed_y
