@@ -2,11 +2,12 @@
 
 from cmath import inf
 import logging
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 import numpy as np
-import rospy
 
+from three_dim_vec import Error
+from duckietown_msgs.msg import PIDState
 
 class PIDaxis:
 
@@ -14,7 +15,7 @@ class PIDaxis:
                  kp, ki, kd,
                  i_range=(1000,2000),
                  d_range=None,
-                 control_range=(1000, 2000),
+                 control_range : Tuple[int] = (1000, 2000),
                  midpoint=1500,
                  smoothing=True):
         
@@ -42,7 +43,7 @@ class PIDaxis:
         self._d = 0
         self._dd = 0
         self._ddd = 0
-
+        
     def reset(self):
         self._old_err = None
         self._p = 0
@@ -53,8 +54,8 @@ class PIDaxis:
         self._dd = 0
         self._ddd = 0
 
-    def step(self, err, time_elapsed) -> int:
-        if time_elapsed <= 0:
+    def step(self, err, delta_t) -> float:
+        if delta_t <= 0:
             return 0
 
         if self._old_err is None:
@@ -65,12 +66,12 @@ class PIDaxis:
         self._p = err * self.kp
 
         # Compute the i component
-        self.integral += err * self.ki * time_elapsed
+        self.integral += err * self.ki * delta_t
         if self.i_range is not None:
             self.integral = np.clip(self.integral, self.i_range[0], self.i_range[1])
 
         # Compute the d component
-        self._d = (err - self._old_err) * self.kd / time_elapsed
+        self._d = (err - self._old_err) * self.kd / delta_t
         if self.d_range is not None:
             self._d = max(self.d_range[0], min(self._d, self.d_range[1]))
         self._old_err = err
@@ -85,7 +86,7 @@ class PIDaxis:
         raw_output = self._p + self.integral + self._d
         output = np.clip(raw_output + self.midpoint, self.control_range[0], self.control_range[1])
 
-        return int(output)
+        return output
 
 
 # noinspection DuplicatedCode
@@ -149,8 +150,10 @@ class PID:
 
         # Tuning values specific to each drone
         # TODO: these should be params
-        self.roll_low.init_i = 0.31
-        self.pitch_low.init_i = -1.05
+        if self.roll_low is not None:
+            self.roll_low.init_i = 0.31
+        if self.pitch_low is not None:
+            self.pitch_low.init_i = -1.05
         self.reset()
 
     def reset(self):
@@ -160,9 +163,10 @@ class PID:
 
         # reset individual PIDs
         for pid in [self.roll, self.roll_low, self.pitch, self.pitch_low, self.throttle]:
-            pid.reset()
+            if pid is not None:
+                pid.reset()
 
-    def step(self, error, cmd_yaw_velocity=0) -> List[int]:
+    def step(self, error : Error, t :float, cmd_yaw_velocity=0) -> List[int]:
         """ Compute the control variables from the error using the step methods
         of each axis pid.
         """
@@ -170,9 +174,9 @@ class PID:
         if self._t is None:
             time_elapsed = 1
         else:
-            time_elapsed = rospy.get_time() - self._t
+            time_elapsed = t - self._t
 
-        self._t = rospy.get_time()
+        self._t = t
 
         cmd_roll = self.compute_axis_command(
             error.x,
@@ -204,7 +208,7 @@ class PID:
             self.xy_plane_cmd_to_rc_cmd(np.degrees(cmd_roll)),
             self.xy_plane_cmd_to_rc_cmd(np.degrees(cmd_pitch)),
             cmd_yaw,
-            cmd_throttle,
+            int(cmd_throttle),
         ]
 
     def compute_axis_command(
@@ -214,7 +218,7 @@ class PID:
         pid: PIDaxis,
         pid_low: Optional[PIDaxis] = None,
         trim_controller: float = 5,
-    ) -> int:
+    ) -> float:
         if pid_low is None:
             cmd = pid.step(error, time_elapsed)
             return cmd
@@ -232,7 +236,8 @@ class PID:
                 pid_low.step(-trim_controller, time_elapsed)
             else:
                 pid_low.step(error, time_elapsed)
-            cmd = pid_low.integral + pid.step(error, time_elapsed)
+            # cmd = pid_low.integral + pid.step(error, time_elapsed)
+            cmd = pid.step(error, time_elapsed)
         
         return cmd
 
