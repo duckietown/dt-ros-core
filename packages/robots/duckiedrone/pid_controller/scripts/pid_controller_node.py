@@ -156,7 +156,6 @@ class PIDControllerNode(DTROS):
 
         rospy.Subscriber("~mode", FCUState, self.current_mode_callback, queue_size=1)
         rospy.Subscriber("~state", Odometry, self.current_state_callback, queue_size=1)
-        rospy.Service("~reload_params", SetBool, self.reset_pid_param_values)
 
         # TODO: refactor callbacks
         rospy.Subscriber("desired/pose", Pose, self.desired_pose_callback, queue_size=1)
