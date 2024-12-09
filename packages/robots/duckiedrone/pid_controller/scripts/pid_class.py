@@ -179,7 +179,7 @@ class PID:
         self._t = t
 
         cmd_roll = self.compute_axis_command(
-            error.x,
+            error.y,
             time_elapsed,
             pid_low=self.roll_low,
             pid=self.roll,
@@ -187,7 +187,7 @@ class PID:
             )
 
         cmd_pitch = self.compute_axis_command(
-            error.y,
+            error.x,
             time_elapsed,
             pid_low=self.pitch_low,
             pid=self.pitch,
