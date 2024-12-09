@@ -1,19 +1,18 @@
 #!/usr/bin/env python3
 
-
 from enum import IntEnum
+from math import inf
 from typing import List
 import rospy
 import tf
-from duckietown_msgs.msg import DroneControl as RC
+from duckietown_msgs.msg import DroneControl as RC, PIDDiagnostics as PIDDebugInfo, PIDState
 from mavros_msgs.msg import State as FCUState
 from geometry_msgs.msg import Pose, Twist
 from nav_msgs.msg import Odometry
 from std_msgs.msg import Empty, Bool, Float32
 from std_srvs.srv import SetBool, SetBoolResponse, SetBoolRequest
-from duckietown_msgs.msg import PIDDiagnostics as PIDDebugInfo
 
-from duckietown.dtros import DTROS, NodeType
+from duckietown.dtros import DTROS, DTParam, NodeType, ParamType
 from pid_class import PID, PIDaxis
 from three_dim_vec import Position, Velocity, Error, RPY
 
@@ -22,14 +21,20 @@ class DroneMode(IntEnum):
     ARMED = 1
     FLYING = 2
 
-class PIDController(DTROS):
+class PIDControllerNode(DTROS):
     """
     Controls the flight of the drone by running a PID controller on the
-    error calculated by the desired and current velocity and position of the drone
+    error calculated by the desired and current velocity and position of the drone.
+
+    The parameters of the PID controller are defined in the DTROS configuration file.
+    They can be tuned on the fly to adjust the drone's response by changing the value of 
+    the respective rosparam parameter using `rosparam set`
+    (e.g. on the 'endeavour' drone the proportional gain of the pitch PID can be set to 1.0 by
+    calling `rosparam set /endeavour/pid_controller_node/pitch_kp 1.0').
     """
 
     def __init__(self):
-        super(PIDController, self).__init__(node_name="pid_controller_node",
+        super(PIDControllerNode, self).__init__(node_name="pid_controller_node",
                                             node_type=NodeType.CONTROL)
         
         self.frequency = rospy.get_param("~frequency")
@@ -68,7 +73,24 @@ class PIDController(DTROS):
 
         # Primary PID: the error used for the PID which is vx, vy, z where vx and
         # vy are velocities, and z is the error in the altitude of the drone
-        self.pid = PID()
+        self.pid = PID(
+                roll=PIDaxis(
+                    0.5, 0.0, 0.0,
+                    control_range=(-inf, +inf),
+                    midpoint=0,
+                    i_range=(-100, 100)
+                 ),
+                 roll_low=None,
+                 pitch=PIDaxis(
+                    0.5, 0.0, 0.0,
+                    control_range=(-inf, +inf),
+                    midpoint=0,
+                    i_range=(-100, 100)
+                 ),
+                 pitch_low=None,
+        )
+
+        self.initialize_pid_gains()
         self.pid_error = Error()
 
         # Initialize the 'position error to velocity error' PIDs:
@@ -134,6 +156,8 @@ class PIDController(DTROS):
 
         rospy.Subscriber("~mode", FCUState, self.current_mode_callback, queue_size=1)
         rospy.Subscriber("~state", Odometry, self.current_state_callback, queue_size=1)
+        rospy.Service("~reload_params", SetBool, self.reset_pid_param_values)
+
         # TODO: refactor callbacks
         rospy.Subscriber("desired/pose", Pose, self.desired_pose_callback, queue_size=1)
         rospy.Subscriber("desired/twist", Twist, self.desired_twist_callback, queue_size=1)
@@ -146,6 +170,57 @@ class PIDController(DTROS):
 
         # publish internal desired pose (hover pose)
         self._desired_height_pub.publish(Float32(self.desired_position.z))
+
+    def _set_pid_gain(self, axis: str, gain: str, value: float):
+        """
+        Sets the specified gain for the specified axis in the PID controller.
+
+        Args:
+            axis (str): The axis name (e.g., 'pitch', 'roll', etc.).
+            gain (str): The gain name (e.g., 'kp', 'ki', 'kd').
+            value (float): The value to set for the specified gain.
+        """
+        # Construct the attribute path dynamically
+        pid_attr = getattr(self.pid, axis)  # e.g., self.pid.pitch
+        if not hasattr(pid_attr, gain):
+            raise AttributeError(f"The gain '{gain}' does not exist on the PID axis '{axis}'.")
+        setattr(pid_attr, gain, value)
+    
+    def _update_pid_from_param(self, param: DTParam):
+        # The parameter name structure is "/ROBOT_NAME/pid_controller_node/pitch_kp"
+        axis, gain, = param.name.split("/")[-1].split("_")
+        self._set_pid_gain(axis, gain, param.value)
+    
+    def initialize_pid_gains(self):
+        """
+        Method that registers the PID parameters DTParams.
+        """
+        
+        # Create the PID parameters
+        self.pitch_kp = DTParam("~pitch_kp", param_type=ParamType.FLOAT)
+        self.pitch_ki = DTParam("~pitch_ki", param_type=ParamType.FLOAT)
+        self.pitch_kd = DTParam("~pitch_kd", param_type=ParamType.FLOAT)
+
+        self.roll_kp = DTParam("~roll_kp", param_type=ParamType.FLOAT)
+        self.roll_ki = DTParam("~roll_ki", param_type=ParamType.FLOAT)
+        self.roll_kd = DTParam("~roll_kd", param_type=ParamType.FLOAT)
+
+        self.throttle_kp = DTParam("~throttle_kp", param_type=ParamType.FLOAT)
+        self.throttle_ki = DTParam("~throttle_ki", param_type=ParamType.FLOAT)
+        self.throttle_kd = DTParam("~throttle_kd", param_type=ParamType.FLOAT)
+
+        self.yaw_kp = DTParam("~yaw_kp", param_type=ParamType.FLOAT)
+        self.yaw_ki = DTParam("~yaw_ki", param_type=ParamType.FLOAT)
+        self.yaw_kd = DTParam("~yaw_kd", param_type=ParamType.FLOAT)
+        
+        # Add callbacks to update the PID parameters from the DTParams when there is a change
+        for param in [self.pitch_kp, self.pitch_ki, self.pitch_kd,
+                      self.roll_kp, self.roll_ki, self.roll_kd,
+                      self.throttle_kp, self.throttle_ki, self.throttle_kd,
+                      self.yaw_kp, self.yaw_ki, self.yaw_kd]:
+
+            self._update_pid_from_param(param)
+            param.register_update_callback(lambda p=param: self._update_pid_from_param(p))
 
     def takeoff_srv(self, req: SetBoolRequest):
         """ Service to switch between flying and not flying """
@@ -199,7 +274,9 @@ class PIDController(DTROS):
         self.desired_yaw_velocity = msg.angular.z
         self.desired_velocity_start_time = None
         self.desired_yaw_velocity_start_time = None
-        # rospy.loginfo(f"Desired_velocity {self.desired_velocity}")
+        
+        rospy.loginfo(f"Desired_velocity set to {self.desired_velocity}")
+        
         if self.path_planning:
             self.calculate_travel_time()
 
@@ -232,9 +309,10 @@ class PIDController(DTROS):
     def lost_callback(self, msg):
         self.lost = msg.data
 
-    # Step Method
     def step(self):
         """ Returns the commands generated by the pid """
+        time = rospy.get_time()
+
         self.calc_error()
         if self.position_control:
             if self.position_error.xy_magnitude() < self.safety_threshold and not self.lost:
@@ -250,7 +328,7 @@ class PIDController(DTROS):
         if self.desired_velocity.magnitude > 0 or abs(self.desired_yaw_velocity) > 0:
             self.adjust_desired_velocity()
 
-        control_command = self.pid.step(self.pid_error, self.desired_yaw_velocity)
+        control_command = self.pid.step(self.pid_error, time, self.desired_yaw_velocity)
 
         if self.debug_pub.get_num_connections() > 0:
             self._publish_debug_info(control_command)
@@ -356,7 +434,7 @@ class PIDController(DTROS):
         distance for a desired velocity
         """
         if self.desired_velocity.magnitude > 0:
-            # tiime = distance / velocity
+            # time = distance / velocity
             travel_time = self.desired_velocity_travel_distance / self.desired_velocity.xy_magnitude()
         else:
             travel_time = 0.0
@@ -406,10 +484,30 @@ class PIDController(DTROS):
             velocity_error=self.velocity_error.as_ros_vector3(),    
             pid_error=self.pid_error.as_ros_vector3(),
             fly_command=RC(*control_command),
-            throttle_integral=self.pid.throttle.integral
+            throttle_integral=self.pid.throttle.integral,
+            pid_pitch=self.pid_axis_to_pid_state_msg(self.pid.pitch, self.pid_error.y),
+            pid_roll=self.pid_axis_to_pid_state_msg(self.pid.roll, self.pid_error.x),
+            pid_throttle=self.pid_axis_to_pid_state_msg(self.pid.throttle, self.pid_error.z),
+            pid_yaw=self.pid_axis_to_pid_state_msg(self.pid.yaw, self.desired_yaw_velocity),
         )
         
         self.debug_pub.publish(debug_info)
+
+    @staticmethod
+    def pid_axis_to_pid_state_msg(pid : PIDaxis, error : float) -> PIDState:
+        """
+        Generate a PIDState message from a PIDaxis object for debugging purposes.
+        """
+        
+        msg = PIDState(
+            error=error,
+            kp=pid.kp,
+            ki=pid.ki,
+            kd=pid.kd,
+            proportional_output=pid._p,
+            derivative_output=pid._d,
+            integral_output=pid.integral,
+        )
 
     def log_mode_transition(self):
         """
@@ -429,12 +527,10 @@ class PIDController(DTROS):
         
         return True
 
-def main(controller : PIDController):
-    # Verbosity between 0 and 2, 2 is most verbose
+def main(controller : PIDControllerNode):
     verbose = 2
 
-    # create the PIDController object
-    pid : PIDController = controller
+    pid : PIDControllerNode = controller
 
     control_loop_rate = rospy.Rate(pid.frequency)
     rospy.loginfo('PID Controller Started')
@@ -492,4 +588,4 @@ def main(controller : PIDController):
 
 
 if __name__ == '__main__':
-    main(PIDController())
+    main(PIDControllerNode())
