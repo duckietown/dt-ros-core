@@ -1,0 +1,10 @@
+version: 1.0
+wheels:
+  map_0/vehicle_0/wheel_left:
+    radius: 0.0318
+    encoder:
+      resolution: 135
+  map_0/vehicle_0/wheel_right:
+    radius: 0.0318
+    encoder:
+      resolution: 135

@@ -1,5 +1,8 @@
 from math import floor, sqrt
 
+
+from math import floor, sqrt
+from collections import OrderedDict
 import numpy as np
 import duckietown_code_utils as dtu
 from scipy.ndimage.filters import gaussian_filter
@@ -11,7 +14,7 @@ from .visualization import plot_phi_d_diagram_bgr
 __all__ = ["LaneFilterHistogram"]
 
 
-class LaneFilterHistogram(LaneFilterInterface):
+class LaneFilterHistogram():
     """Generates an estimate of the lane pose.
 
 
@@ -41,7 +44,6 @@ class LaneFilterHistogram(LaneFilterInterface):
     d_min: float
     phi_max: float
     phi_min: float
-    cov_v: float
     linewidth_white: float
     linewidth_yellow: float
     lanewidth: float
@@ -52,10 +54,14 @@ class LaneFilterHistogram(LaneFilterInterface):
     range_est: float
     range_max: float
 
-    def __init__(self, **kwargs):
+    def __init__(self, encoder_resolution, wheel_baseline, wheel_radius, **kwargs):
+        self.encoder_resolution = encoder_resolution
+        self.wheel_baseline = wheel_baseline
+        self.wheel_radius = wheel_radius
+
         param_names = [
-            "mean_d_0",
-            "mean_phi_0",
+            "mean_d_0", # the initial mean lateral offset (probably 0)
+            "mean_phi_0", # the initial mean angular offset (probably 0)
             "sigma_d_0",
             "sigma_phi_0",
             "delta_d",
@@ -100,16 +106,19 @@ class LaneFilterHistogram(LaneFilterInterface):
         self.use_yellow = True
         self.range_est_min = 0
         self.filtered_segments = []
+        self.initialized = False
 
-        self.initialize()
+        self.initialize_belief()
 
-    def initialize(self):
+    def initialize_belief(self):
         pos = np.empty(self.d.shape + (2,))
         pos[:, :, 0] = self.d
         pos[:, :, 1] = self.phi
         RV = multivariate_normal(self.mean_0, self.cov_0)
-
         self.belief = RV.pdf(pos)
+        self.belief = self.belief/np.sum(self.belief)
+
+        self.initialized = True
 
     def getStatus(self):
         return LaneFilterInterface.GOOD
@@ -119,10 +128,22 @@ class LaneFilterHistogram(LaneFilterInterface):
         s = entropy(belief.flatten())
         return s
 
-    def predict(self, dt, v, w):
-        delta_t = dt
-        d_t = self.d + v * delta_t * np.sin(self.phi)
-        phi_t = self.phi + w * delta_t
+    def predict(self, left_encoder_ticks, right_encoder_ticks):
+        if not self.initialized:
+            return
+        # Calculate v and w from ticks using kinematics
+        R = self.wheel_radius
+        alpha = 2 * np.pi / self.encoder_resolution
+        d_left = R * alpha * left_encoder_ticks 
+        d_right = R * alpha * right_encoder_ticks
+        d_A = (d_left + d_right) / 2
+        w = (d_right - d_left) / self.wheel_baseline
+        [d_t, phi_t] = self.getEstimate()
+        v = d_A * np.sin(w + phi_t)
+
+        # Propagate each centroid forward using the kinematic function
+        d_t = self.d + v 
+        phi_t = self.phi + w 
 
         p_belief = np.zeros(self.belief.shape)
 
@@ -149,6 +170,7 @@ class LaneFilterHistogram(LaneFilterInterface):
 
         if np.sum(s_belief) == 0:
             return
+
         self.belief = s_belief / np.sum(s_belief)
 
     # prepare the segments for the creation of the belief arrays
@@ -170,6 +192,9 @@ class LaneFilterHistogram(LaneFilterInterface):
             # filter out any segments that are behind us
             if segment.points[0].x < 0 or segment.points[1].x < 0:
                 continue
+            #filter segments over and behind by 20cm
+            #if (segment.points[0].y < -0.2 and segment.points[1].y < -0.2) or (segment.points[0].y > 0.2 and segment.points[1].y > 0.2):
+            #    continue
 
             self.filtered_segments.append(segment)
             # only consider points in a certain range from the Duckiebot for the position estimation
@@ -177,14 +202,17 @@ class LaneFilterHistogram(LaneFilterInterface):
             if self.range_est > point_range > self.range_est_min:
                 segmentsArray.append(segment)
                 # print functions to help understand the functionality of the code
-                # print 'Adding segment to segmentsRangeArray[0] (Range: %s < 0.3)' % (point_range)
-                # print 'Printout of last segment added: %s' % self.getSegmentDistance(segmentsRangeArray[
-                # 0][-1])
-                # print 'Length of segmentsRangeArray[0] up to now: %s' % len(segmentsRangeArray[0])
+                # print('Adding segment to segmentsRangeArray[0] (Range: %s < 0.3)' % (point_range))
+                # print('Printout of last segment added: %s' % self.getSegmentDistance(segmentsArray[
+                # 0][-1]))
+                # print('Length of segmentsArray[0] up to now: %s' % len(segmentsArray[0]))
 
         return segmentsArray
 
     def update(self, segments):
+        if not self.initialized:
+            return
+
         # prepare the segments for each belief array
         segmentsArray = self.prepareSegments(segments)
         # generate all belief arrays
@@ -259,31 +287,33 @@ class LaneFilterHistogram(LaneFilterInterface):
             if p1[0] > p2[0]:  # right edge of white lane
                 d_i -= self.linewidth_white
             else:  # left edge of white lane
-
-                d_i = -d_i
-
+                d_i -= self.linewidth_white
+                d_i = self.lanewidth * 2 + self.linewidth_yellow - d_i
                 phi_i = -phi_i
             d_i -= self.lanewidth / 2
 
         elif segment.color == segment.YELLOW:  # left lane is yellow
             if p2[0] > p1[0]:  # left edge of yellow lane
                 d_i -= self.linewidth_yellow
+                d_i = self.lanewidth/2 - d_i
                 phi_i = -phi_i
-            else:  # right edge of white lane
-                d_i = -d_i
-            d_i = self.lanewidth / 2 - d_i
+            else:  # right edge of yellow lane
+                d_i += self.linewidth_yellow
+                d_i -= self.lanewidth/2
 
         # weight = distance
         weight = 1
         return d_i, phi_i, l_i, weight
 
-    def get_inlier_segments(self, segments, d_max, phi_max):
-        inlier_segments = []
-        for segment in segments:
-            d_s, phi_s, l, w = self.generateVote(segment)
-            if abs(d_s - d_max) < self.delta_d and abs(phi_s - phi_max) < self.delta_phi:
-                inlier_segments.append(segment)
-        return inlier_segments
+    ###NOT USED ANYMORE
+    # def get_inlier_segments(self, segments, d_max, phi_max):
+    #     inlier_segments = []
+    #     for segment in segments:
+    #         d_s, phi_s, l, w = self.generateVote(segment)
+    #         if abs(d_s - d_max) < self.delta_d and abs(phi_s - phi_max) < self.delta_phi:
+    #             inlier_segments.append(segment)
+    #     return inlier_segments
+    ###
 
     # get the distance from the center of the Duckiebot to the center point of a segment
     def getSegmentDistance(self, segment):
@@ -291,6 +321,7 @@ class LaneFilterHistogram(LaneFilterInterface):
         y_c = (segment.points[0].y + segment.points[1].y) / 2
         return sqrt(x_c**2 + y_c**2)
 
+    #FIXME: Fix Bugs in the Visualization 
     def get_plot_phi_d(self, ground_truth=None) -> dtu.NPImageBGR:
         d, phi = self.getEstimate()
         return plot_phi_d_diagram_bgr(self, self.belief, phi=phi, d=d)

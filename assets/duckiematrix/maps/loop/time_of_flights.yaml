@@ -1,0 +1,7 @@
+version: 1.0
+time_of_flights:
+  map_0/vehicle_0/tof_front_center:
+    name: front_center
+    angle: 0.4363
+    maximum_distance: 1.2
+    frequency: 15

@@ -1,0 +1,48 @@
+# BaseComNode:
+
+time_out_sec : 120 # Duration after which the node times out and a time_out flag is published
+fps_history_duration_sec : 3 # Keep 3sec of images time stamps history
+fps_update_period_sec : 1 # Period in sec to compute and update fps
+default_img_fps : 30
+
+# Debug/demo mode, default is both False to run in normal full navigation mode
+# Only one should be True at a time
+ss_demo_mode : False # Switch to True to set code for running in SS mode indefinitely 
+tl_demo_mode : False # Switch to True to set code for running in TL mode indefinitely
+
+
+
+# Stop Sign Solver:
+
+# Permitted frequencies that can be used for flashing (READABLE: [2, 4, 5, 6, 8, 10, 15])
+# Based on tests (using fifo_bridge):
+#  1 is not readable, 7 and 8 are too fast to be emitted consistently.
+#  For now best are 2, 3, 4, 5 and 6. We use [2, 4, 6] to keep a margin.
+permitted_freq_list : [2, 4, 6]
+freq_error_upper_margin : 1 # This is used (Added to the read freq) as an upper error margin to account for reading higher freq
+                            # than what the other bot is really flashing at. It avoids mistakenly deciding a GO. We prefer it
+                            # to wait for another cycle in this case.
+sensing_duration_sec : 10 # Sensing duration (in sec) for a sensing step
+# Parameters for the SS PointBuffer()
+ss_buffer_length: 60
+ss_buffer_forget_time: 40
+ss_brightness_threshold : 120
+ss_max_diff_threshold : 50
+ss_g_blur_sigma_x : 3
+ss_g_blur_sigma_y : 3
+
+
+# Traffic Light Solver:
+
+tl_green_blink_freq : 7.8 # TODO use from yaml file of TL node?
+                          # https://github.com/duckietown/dt-duckiebot-interface/blob/daffy/packages/traffic_light/config/traffic_light_node/TL_protocol.yaml
+tl_tolerance_freq_diff : 3 # 3Hz of tolerance +/-
+max_traffic_light_height : 200 # Coord starts from top of image. We only account for a partial portion of the top of the image.
+                               # TODO : make it in % instead of absolute pixel
+# Parameters for the TL PointBuffer()
+tl_buffer_length: 60
+tl_buffer_forget_time: 40
+tl_brightness_threshold : 50
+tl_max_diff_threshold : 25
+tl_g_blur_sigma_x : 1
+tl_g_blur_sigma_y : 1

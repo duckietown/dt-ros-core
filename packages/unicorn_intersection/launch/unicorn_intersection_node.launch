@@ -6,7 +6,7 @@
     <arg name="node_name" default="unicorn_intersection_node"/>
 
     <group ns="$(arg veh)">
-        <node  name="$(arg node_name)" pkg="$(arg pkg_name)" type="$(arg node_name).py" output="screen" required="true">
+        <node name="$(arg node_name)" pkg="$(arg pkg_name)" type="$(arg node_name).py" output="screen" required="true">
             <rosparam command="load" file="$(find unicorn_intersection)/config/$(arg node_name)/$(arg param_file_name).yaml"/>
         </node>
     </group>

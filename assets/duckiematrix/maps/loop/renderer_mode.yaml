@@ -1,0 +1,6 @@
+version: 1.0
+renderer_mode:
+  renderer_0:
+    interactive: true
+  "*":
+    interactive: true

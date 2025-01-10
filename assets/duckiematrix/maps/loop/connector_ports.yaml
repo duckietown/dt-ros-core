@@ -1,0 +1,12 @@
+version: 1.0
+connector_ports: {}
+#    world-control-out-port: 7501
+#    matrix-control-out-port: 7502
+#    matrix-data-out-port: 17510
+#    matrix-data-in-port: 17511
+#    world-data-out-port: 17512
+#    world-data-in-port: 17513
+#    robot-data-out-port: 17514
+#    robot-data-in-port: 17515
+#    layer-data-out-port: 17516
+#    layer-data-in-port: 17517

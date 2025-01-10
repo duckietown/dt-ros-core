@@ -1,0 +1,19 @@
+version: 1.0
+rendering_configuration:
+  map_0/vehicle_0/camera_0:
+    lens_distortion: true
+    hdr: false
+    anti_aliasing: true
+    shadows: true
+
+  map_0/watchtower_0/camera_0:
+    lens_distortion: true
+    hdr: false
+    anti_aliasing: true
+    shadows: true
+
+  map_0/vehicle_0/cameraman_0/camera_0:
+    lens_distortion: false
+    hdr: false
+    anti_aliasing: true
+    shadows: true

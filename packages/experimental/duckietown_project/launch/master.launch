@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<launch>
+
+<include file="$(find duckietown_project)/launch/communicators.launch"/>
+<include file="$(find duckietown_project)/launch/followers.launch"/> 
+<include file="$(find duckietown_project)/launch/navigators.launch"/>
+<include file="$(find duckietown_project)/launch/integrators.launch"/>
+<include file="$(find duckietown_project)/launch/avoid.launch"/>
+<include file="$(find duckietown_project)/launch/detectors.launch"/>
+
+</launch>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<launch>
+<arg name="communication" value="true"/>
+<group if="$(arg communication)">
+        <remap from="communication_node/image_in" to="camera_node/image/compressed"/>
+        <remap from="communication_node/intersection_type_in" to="apriltag_postprocessing_node/apriltags_out"/>
+        <remap from="communication_node/set_custom_pattern" to="led_emitter_node/set_custom_pattern"/>
+        <include file="$(find communication)/launch/communication_node.launch">
+            <arg name="veh" value="$(env VEHICLE_NAME)"/>
+            <arg name="param_file_name" value="$(arg param_file_name)"/>
+        </include>
+    </group>
+</launch>

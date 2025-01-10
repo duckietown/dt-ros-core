@@ -1,0 +1,7 @@
+version: 1.0
+vehicle_tags:
+  map_0/vehicle_0/tag:
+    name: top
+    size: 0.08
+    id: 403
+    family: 36h11

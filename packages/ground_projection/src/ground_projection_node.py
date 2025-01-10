@@ -5,8 +5,9 @@ from typing import Optional, Union
 
 from dt_computer_vision.camera import Pixel
 import numpy as np
-from dt_computer_vision.camera.types import NormalizedImagePoint
+from dt_computer_vision.camera.types import NormalizedImagePoint, ResolutionIndependentImagePoint
 from dt_computer_vision.ground_projection import GroundPoint
+from dt_computer_vision.ground_projection.rendering import debug_image
 import rospy
 from cv_bridge import CvBridge
 from duckietown_msgs.msg import Segment, SegmentList
@@ -141,6 +142,7 @@ class GroundProjectionNode(DTROS):
             )
 
             self.homography = self.load_extrinsics()
+            print(f"got homography {self.homography}")
             self.camera.H = self.homography
             self.projector = GroundProjector(self.camera)
 
@@ -148,7 +150,7 @@ class GroundProjectionNode(DTROS):
 
         self.camera_info_received = True
 
-    def _pixel_to_ground(self, p: Pixel) -> GroundPoint:
+    def _pixel_to_ground(self, p: ResolutionIndependentImagePoint) -> GroundPoint:
         """
         Converts a pixel coordinate to a ground point.
 
@@ -164,11 +166,10 @@ class GroundProjectionNode(DTROS):
         if self.camera is None:
             raise ValueError("Camera model not initialized")
 
-        # rectified pixel to normalized coordinates
-        p_norm: NormalizedImagePoint = self.camera.pixel2vector(p)
-
-        # project image point onto the ground plane
-        p_ground: GroundPoint = self.projector.vector2ground(p_norm)
+        pixel: Pixel = self.camera.independent2pixel(p)
+        rect: Pixel = self.camera.rectifier.rectify_pixel(pixel)
+        vector: NormalizedImagePoint = self.camera.pixel2vector(rect)
+        p_ground: GroundPoint = self.projector.vector2ground(vector)
 
         return p_ground
 
@@ -183,7 +184,7 @@ class GroundProjectionNode(DTROS):
             :obj:`geometry_msgs.msg.Point`: Ground message
 
         """
-        p = Pixel(x=pixel_msg.x, y=pixel_msg.y)
+        p = ResolutionIndependentImagePoint(x=pixel_msg.x, y=pixel_msg.y)
         p_ground = self._pixel_to_ground(p)
         return PointMsg(x=p_ground.x, y=p_ground.y)
 
@@ -200,18 +201,28 @@ class GroundProjectionNode(DTROS):
         if self.camera_info_received:
             seglist_out = SegmentList()
             seglist_out.header = seglist_msg.header
+            colored_segments = {(255, 255, 255): [], (0,255,255): [], (255,0,0):[]}
+
             for received_segment in seglist_msg.segments:
                 received_segment: Segment
                 projected_segment = Segment()
                 projected_segment.points[0] = self.pixel_msg_to_ground_msg(
-                    received_segment.points[0]
+                    received_segment.pixels_normalized[0]
                 )
                 projected_segment.points[1] = self.pixel_msg_to_ground_msg(
-                    received_segment.points[1]
+                    received_segment.pixels_normalized[1]
                 )
                 projected_segment.color = received_segment.color
                 # TODO what about normal?
                 seglist_out.segments.append(projected_segment)
+
+                if projected_segment.color == 0:
+                    color_vect = (255,255,255)
+                elif projected_segment.color == 1:
+                    color_vect = (0, 255, 255)
+                else:
+                    color_vect = (255, 0, 0)
+                colored_segments[color_vect].append((projected_segment.points[0], projected_segment.points[1]))
             self.pub_lineseglist.publish(seglist_out)
 
             if not self._first_processing_done:
@@ -219,9 +230,9 @@ class GroundProjectionNode(DTROS):
                 self._first_processing_done = True
 
             if self.pub_debug_road_view_img.get_num_connections() > 0:
-                return  # TODO: Reimplement using debug_image from dt_computer_vision
+                #return  # TODO: Reimplement using debug_image from dt_computer_vision
                 debug_image_msg = self.bridge.cv2_to_compressed_imgmsg(
-                    self.debug_image(seglist_out)
+                    debug_image(colored_segments,(300, 300), grid_size=6, s_segment_thickness=5)
                 )
                 debug_image_msg.header = seglist_out.header
                 self.pub_debug_road_view_img.publish(debug_image_msg)

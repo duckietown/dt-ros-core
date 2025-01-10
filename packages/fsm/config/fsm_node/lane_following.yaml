@@ -19,6 +19,8 @@ nodes:
   line_detector_node: "line_detector_node/switch"
   lane_filter_node: "lane_filter_node/switch"
   ground_projection_node: "ground_projection_node/switch"
+  lane_controller_node: "lane_controller_node/switch"
+  led_emitter_node: "led_emitter_node/switch"
   # extras added
 
 
@@ -35,6 +37,7 @@ states:
       - lane_filter_node
       - line_detector_node
       - ground_projection_node
+      - led_emitter_node
     lights: "GREEN"
   LANE_FOLLOWING:
     active_nodes:
@@ -42,6 +45,6 @@ states:
       - line_detector_node
       - lane_filter_node
       - ground_projection_node
-    lights: "RED"
-
-
+      - lane_controller_node
+      - led_emitter_node
+    lights: "CAR_DRIVING"

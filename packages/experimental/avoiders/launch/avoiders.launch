@@ -1,0 +1,12 @@
+<launch>
+	<arg name="veh"/>
+	<arg name="pkg_name" default="avoiders" doc="name of the package"/>
+	<arg name="node_name" default="avoiders_controller_node" doc="name of the node"/>
+	<arg name="node_name_2" default="detect_obstacle" doc="name of the node"/>
+
+        <group ns="$(arg veh)">
+	    <node  pkg="$(arg pkg_name)" type="$(arg node_name).py" name="$(arg node_name)" output="screen"/>
+	    <node  pkg="$(arg pkg_name)" type="$(arg node_name_2).py" name="$(arg node_name_2)" output="screen"/>
+		</group>
+
+</launch>

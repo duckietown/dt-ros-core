@@ -1,0 +1,6 @@
+version: 1.0
+vehicles:
+  map_0/vehicle_0:
+    configuration: DB21M
+    id: ''
+    color: ~
