@@ -1,0 +1,4 @@
+version: 1.0
+street_lights:
+  map_0/street_light_0:
+    model: ~

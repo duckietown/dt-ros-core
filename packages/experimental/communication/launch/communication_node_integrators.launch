@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="utf-8"?>
+<launch>
+    <!-- start args TODO: most things here should come from node's config files!-->
+    <arg name="veh" default="$(env VEHICLE_NAME)"
+         doc="The name of the robot (e.g., autobot01, watchtower02, ...)"/>
+    <arg name="robot_type" default="$(env ROBOT_TYPE)"
+         doc="The type of the robot (e.g., duckiebot, watchtower, traffic_light, ...)"/>
+    <arg name="robot_configuration" default="$(env ROBOT_CONFIGURATION)"
+         doc="The configuration of the robot (e.g., DB19, DB20, WT18, ...)"/>
+    <arg name="demo_name" /> <!-- this is required  used for demo specific configs like fsm -->
+    <arg name="config" default="baseline" />
+    <arg name="camera_topic" default="camera_node"/>
+    <arg name="param_file_name" default="default" />
+    <arg name="apriltags_param_file_name" default="$(arg param_file_name)" />
+    <!-- <arg name="fsm_file_name" default="$(arg demo_name)" /> -->
+    <arg name="verbose" default="false" />
+    <arg name="ai_trafo_mode" default="cb" doc="'cb' for colo balance only; 'both' for color balance and linear trafo"/>
+    <arg name="ai_interval" default="5" doc="interval with which the linear trafo gets updated. color balance is performed every second."/>
+    <arg name="line_detector_param_file_name" default="$(arg param_file_name)"/>
+    <arg name="intersectionType" default= "stopSign"/>
+    <!-- end args -->
+
+    <!-- start switch args -->
+    <arg name="/camera/raw" default="true"/>
+    <arg name="apriltags" default="false"/>
+    <arg name="LED" default="true" />
+    <arg name="/LED/emitter" default="true" />
+    <arg name="communication" value="true"/>
+    <!-- 
+    <arg name="fsm" default="false"/>
+    <arg name="/fsm/logic_gate" default="false"/>
+    -->
+
+
+    <!-- Image Decoding -->
+    <group if="$(arg /camera/raw)">
+        <remap from="decoder_node/image_in" to="camera_node/image/compressed"/>
+        <remap from="decoder_node/image_out" to="camera_node/image/raw"/>
+        <include file="$(find image_processing)/launch/image_decoding.launch">
+            <arg name="veh" value="$(arg veh)"/>
+            <arg name="param_file_name" value="$(arg param_file_name)"/>
+        </include>
+    </group>
+    <!-- End Image Decoding -->
+
+
+    <!-- Start AprilTags -->
+    <group if="$(arg apriltags)">
+        <!-- Detector node -->
+        <remap from="apriltag_detector_node/image" to="camera_node/image/compressed" />
+        <remap from="apriltag_detector_node/camera_info" to="camera_node/camera_info" />
+        <include file="$(find apriltag)/launch/apriltag_detector_node.launch">
+            <arg name="veh" value="$(arg veh)"/>
+        </include>
+
+        <!-- Postprocessing node -->
+        <remap from="apriltag_postprocessing_node/detections" to="apriltag_detector_node/detections" />
+        <include file="$(find apriltag)/launch/apriltag_postprocessing_node.launch">
+            <arg name="veh" value="$(arg veh)"/>
+            <arg name="config" value="$(arg config)"/>
+            <arg name="param_file_name" value="$(arg param_file_name)"/>
+        </include>
+    </group>
+    <!--End Apriltags -->
+
+
+    <!-- Start LEDs -->
+    <group if="$(arg LED)">
+        <!--<remap from="led_pattern_switch_node/change_color_pattern" to="led_emitter_node/set_pattern" />-->
+        <group if="$(arg /LED/emitter)">
+            <include file="$(find led_emitter)/launch/led_emitter_node.launch">
+                <arg name="veh" value="$(arg veh)"/>
+            </include>
+        </group>
+    </group>
+    <!-- End LEDs -->
+
+
+    <!-- Start Communication (New intersection coorditation) -->
+    <group if="$(arg communication)">
+        <remap from="communication_node/image_in" to="camera_node/image/compressed"/>
+        <remap from="communication_node/intersection_type_in" to="apriltag_postprocessing_node/apriltags_out"/>
+        <remap from="communication_node/set_custom_pattern" to="led_emitter_node/set_custom_pattern"/>
+        <include file="$(find communication)/launch/communication_node.launch">
+            <arg name="veh" value="$(arg veh)"/>
+            <arg name="param_file_name" value="$(arg param_file_name)"/>
+        </include>
+    </group>
+    <!-- End Communication -->
+
+</launch>

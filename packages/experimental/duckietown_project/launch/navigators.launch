@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<launch>
+    <arg name="unicorn_intersection" default="true"/>
+
+   <!-- Start Unicorn intersection -->
+    <group if="$(arg unicorn_intersection)">
+        <remap from="unicorn_intersection_node/fsm_state" to="fsm_node/mode"/>
+        <remap from="unicorn_intersection_node/turn_id_and_type" to="random_april_tag_turns_node/turn_id_and_type"/>
+        <!-- <remap from="unicorn_intersection_node/intersection_go" to="coordinator_node/intersection_go"/> -->
+        <!-- <remap from="unicorn_intersection_node/intersection_done" to="intersection_navigation_node/intersection_done"/> -->
+        <!-- <remap from="unicorn_intersection_node/lane_filter_params" to="lane_filter_node/change_params"/> -->
+        <!-- <remap from="unicorn_intersection_node/lane_controller/omega_ff" to="lane_controller_node/omega_ff"/> -->
+        <!-- <remap from="unicorn_intersection_node/lane_controller/omega_min" to="lane_controller_node/omega_min"/> -->
+        <!-- <remap from="unicorn_intersection_node/lane_controller/omega_max" to="lane_controller_node/omega_max"/> -->
+        <!-- <remap from="unicorn_intersection_node/lane_pose_in" to="lane_filter_node/lane_pose"/> -->
+        <!-- <remap from="unicorn_intersection_node/lane_pose_out" to="lane_controller_node/intersection_navigation_pose"/> -->
+        <!-- <remap from="unicorn_intersection_node/intersection_done_detailed" to="intersection_navigation_node/intersection_done_detailed"/> -->
+            <remap from="unicorn_intersection_node/left_wheel_encoder_node/tick" to="left_wheel_encoder_node/tick"/>
+            <remap from="unicorn_intersection_node/right_wheel_encoder_node/tick" to="right_wheel_encoder_node/tick"/>
+        <!-- <remap if="$(arg maintenance_control)" from="unicorn_intersection_node/turn_id_and_type" to="maintenance_control_node/turn_id_and_type_out"/>
+        <remap unless="$(arg maintenance_control)" from="unicorn_intersection_node/turn_id_and_type" to="random_april_tag_turns_node/turn_id_and_type"/> -->
+
+        <include file="$(find unicorn_intersection)/launch/unicorn_intersection_node.launch">
+            <arg name="veh" value="$(env VEHICLE_NAME)"/>
+            <arg name="param_file_name" value="default"/>
+        </include>
+    </group>
+    <!-- End Unicorn intersection -->
+        <!-- Lane controller -->
+        <remap from="random_april_tag_turns_node/tag" to="apriltag_postprocessing_node/apriltags_out"/>
+        <remap from="random_april_tag_turns_node/mode" to="fsm_node/mode"/>
+        <include file="$(find navigation)/launch/random_april_tag_turns_node.launch">
+                <arg name="veh" value="$(env VEHICLE_NAME)"/>
+                <arg name="param_file_name" value="default"/>
+        </include>
+
+<!-- 
+<include file="$(find navigators_controller)/launch/navigators_controller_node.launch"/> -->
+
+
+</launch>

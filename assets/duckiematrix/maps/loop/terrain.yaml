@@ -1,0 +1,10 @@
+version: 1.0
+terrain:
+  terrain_0:
+    visible: true
+  terrain_90:
+    visible: true
+  terrain_180:
+    visible: true
+  terrain_270:
+    visible: true

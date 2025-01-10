@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<launch>
+    <!-- Start FSM -->
+    <!-- <group if="$(arg fsm)"> -->
+<!-- FSM -->
+<!-- no remapping for FSM - full topic names specified in params yaml -->
+	<arg name="veh" default="$(env VEHICLE_NAME)"
+         doc="The name of the robot (e.g., autobot01, watchtower02, ...)"/>
+	<arg name="fsm_file_name" default="duckietown2022" />
+
+<remap from="fsm_node/set_pattern" to="led_emitter_node/set_pattern"/>
+<include file="$(find fsm)/launch/fsm_node.launch">
+    <arg name="veh" value="$(arg veh)"/>
+    <arg name="param_file_name" value="$(arg fsm_file_name)"/>
+</include>
+
+<include file="$(find led_emitter)/launch/led_emitter_node.launch">
+    <arg name="veh" value="$(arg veh)"/>
+</include>
+
+
+
+
+<!-- <include file="$(find navigation)/launch/random_april_tag_turns_node.launch">
+    <arg name="veh" value="$(env VEHICLE_NAME)"/>
+    <arg name="param_file_name" value="default"/>
+</include> -->
+<!-- car_cmd_switch_node -->
+<!-- no remappings for car_cmd_switch - full topic names specified in params yaml -->
+<!-- <remap from="car_cmd_switch_node/cmd_lane_following" to="lane_controller_node/lane_control"/>
+<group unless="$(arg vehicle_avoidance)">
+        <remap from="vehicle_avoidance_control_node/car_cmd" to="lane_controller_node/car_cmd" />
+</group> -->
+
+<!-- <group if="$(arg /fsm/logic_gate)">
+     <remap from="coordinator_node/intersection_go" to="logic_gate_node/explicit_intersection_go" /> 
+    <include file="$(find fsm)/launch/logic_gate_node.launch">
+    <arg name="veh" value="$(arg veh)"/>
+    <arg name="param_file_name" value="$(arg fsm_file_name)"/>
+    </include>
+</group> -->
+    <!-- </group> -->
+    <!--End FSM -->
+</launch>

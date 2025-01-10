@@ -14,13 +14,19 @@ import tf.transformations as tr
 from geometry_msgs.msg import PoseStamped, Pose
 from std_msgs.msg import Header
 
+from duckietown.dtros import DTROS, NodeType, TopicType, DTParam, ParamType
 
-class AprilPostPros(object):
+class AprilPostPros(DTROS):
     """ """
 
-    def __init__(self):
+    def __init__(self, node_name):
         """ """
-        self.node_name = "apriltag_postprocessing_node"
+        super(AprilPostPros, self).__init__(
+            node_name=node_name,
+            node_type=NodeType.PERCEPTION,
+            fsm_controlled=True
+        )
+        self.node_name = node_name
 
         # Load parameters
         self.camera_x = self.setupParam("~camera_x", 0.065)
@@ -74,9 +80,6 @@ class AprilPostPros(object):
         self.pub_postPros = rospy.Publisher("~apriltags_out", AprilTagsWithInfos, queue_size=1)
         self.pub_visualize = rospy.Publisher("~tag_pose", PoseStamped, queue_size=1)
 
-        # topics for state machine
-        self.pub_postPros_parking = rospy.Publisher("~apriltags_parking", BoolStamped, queue_size=1)
-        self.pub_postPros_intersection = rospy.Publisher("~apriltags_intersection", BoolStamped, queue_size=1)
 
         rospy.loginfo("[%s] has started", self.node_name)
 
@@ -100,51 +103,15 @@ class AprilPostPros(object):
             # Can use id 1 as long as no bundles are used
             new_info.id = int(detection.tag_id)
             id_info = self.tags_dict[new_info.id]
-            # rospy.loginfo("[%s] report detected id=[%s] for april tag!",self.node_name,new_info.id)
+
             # Check yaml file to fill in ID-specific information
             new_info.tag_type = self.sign_types[id_info["tag_type"]]
             if new_info.tag_type == self.info.S_NAME:
                 new_info.street_name = id_info["street_name"]
             elif new_info.tag_type == self.info.SIGN:
                 new_info.traffic_sign_type = self.traffic_sign_types[id_info["traffic_sign_type"]]
-
-                # publish for FSM
-                # parking apriltag event
-                msg_parking = BoolStamped()
-                msg_parking.header.stamp = rospy.Time(0)
-                if new_info.traffic_sign_type == TagInfo.PARKING:
-                    msg_parking.data = True
-                else:
-                    msg_parking.data = False
-                self.pub_postPros_parking.publish(msg_parking)
-
-                # intersection apriltag event
-                msg_intersection = BoolStamped()
-                msg_intersection.header.stamp = rospy.Time(0)
-                if (
-                    (new_info.traffic_sign_type == TagInfo.FOUR_WAY)
-                    or (new_info.traffic_sign_type == TagInfo.RIGHT_T_INTERSECT)
-                    or (new_info.traffic_sign_type == TagInfo.LEFT_T_INTERSECT)
-                    or (new_info.traffic_sign_type == TagInfo.T_INTERSECTION)
-                ):
-                    msg_intersection.data = True
-                else:
-                    msg_intersection.data = False
-                self.pub_postPros_intersection.publish(msg_intersection)
-
             elif new_info.tag_type == self.info.VEHICLE:
                 new_info.vehicle_name = id_info["vehicle_name"]
-
-            # TODO: Implement location more than just a float like it is now.
-            # location is now 0.0 if no location is set which is probably not that smart
-            if self.loc == 226:
-                l = id_info["location_226"]
-                if l is not None:
-                    new_info.location = l
-            elif self.loc == 316:
-                l = id_info["location_316"]
-                if l is not None:
-                    new_info.location = l
 
             tag_infos.append(new_info)
             # --- end tag info processing
@@ -164,8 +131,6 @@ class AprilPostPros(object):
             # Load translation
             trans = detection.transform.translation
             rot = detection.transform.rotation
-            header = Header()
-            header.stamp = rospy.Time.now()
             camzout_t_tagzout = tr.translation_matrix(
                 (trans.x * self.scale_x, trans.y * self.scale_y, trans.z * self.scale_z)
             )
@@ -186,6 +151,6 @@ class AprilPostPros(object):
 
 
 if __name__ == "__main__":
-    rospy.init_node("AprilPostPros", anonymous=False)
-    node = AprilPostPros()
+    # rospy.init_node("AprilPostPros", anonymous=False)
+    node = AprilPostPros(node_name="apriltag_postprocessing_node")
     rospy.spin()

@@ -105,9 +105,15 @@ LED_protocol:
 
     POPO:
       color_mask: []
-      color_list: ["blue","red","switchedoff","blue","red"]
+      color_list: ["blue","red","switchedoff","green","purple"]
       frequency_mask: [1,1,0,1,1]
       frequency: *f2
+
+    JOYFULL:
+      color_mask: []
+      color_list: ["blue","red","switchedoff","green","purple"]
+      frequency_mask: [1,1,0,1,1]
+      frequency: 0
 
 LED_scale: 0.8
 channel_order:

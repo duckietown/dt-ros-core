@@ -17,11 +17,6 @@
 		<!-- Camera and anti intagram -->
 		<arg name="anti_instagram" value="true" />
 
-		<!-- Deadreckoning (aka. Odometry)	-->
-<!--		<arg name="/localization" value="true"/>
-		<arg name="/localization/deadreckoning" value="true"/>
-LP removing for now
--->
 	    <!-- Lane Following stack -->
 	    <arg name="lane_following" value="true"/>
 	    <arg name="/lane_following/line_detection" value="true"/>
@@ -31,7 +26,5 @@ LP removing for now
 	    <arg name="/lane_following/lane_controller" value="true"/>
 	    <arg name="LED" value="true"/>
 	    <arg name="/LED/emitter" value="true"/>
-
   	</include>
-
 </launch>

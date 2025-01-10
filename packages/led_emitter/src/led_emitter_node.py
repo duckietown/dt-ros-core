@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 import time
 import rospy
-
 from duckietown_msgs.srv import SetCustomLEDPattern, ChangePattern
 from duckietown_msgs.srv import SetCustomLEDPatternResponse, ChangePatternResponse
 from duckietown_msgs.msg import LEDPattern
@@ -100,7 +99,11 @@ class LEDEmitterNode(DTROS):
 
     def __init__(self, node_name):
         # Initialize the DTROS parent class
-        super(LEDEmitterNode, self).__init__(node_name=node_name, node_type=NodeType.DRIVER)
+        super(LEDEmitterNode, self).__init__(
+            node_name=node_name,
+            node_type=NodeType.DRIVER,
+            fsm_controlled=True
+        )
 
         self.LEDspattern = [[0.0, 0.0, 0.0]] * 5
 

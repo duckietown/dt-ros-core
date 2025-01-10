@@ -6,9 +6,6 @@
     <arg name="pkg_name" default="lane_control" doc="name of the package"/>
     <arg name="node_name" default="lane_controller_node" doc="name of the node"/>
 
-	<arg name="traffic_mode" doc="Left/Right-hand traffic"/>
-    <param name="/$(arg veh)/behavior/traffic_mode" value="$(arg traffic_mode)" />
-
     <group ns="$(arg veh)">
         <node pkg="$(arg pkg_name)" type="$(arg node_name).py" name="$(arg node_name)"
               output="screen">

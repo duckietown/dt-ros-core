@@ -6,68 +6,61 @@ import math
 import numpy
 
 import rospy
-from duckietown_msgs.msg import AprilTagsWithInfos, FSMState, TurnIDandType
+from duckietown_msgs.msg import AprilTagsWithInfos, FSMState, TurnIDandType, BoolStamped
 from std_msgs.msg import Int16  # Imports msg
+from duckietown.dtros import DTROS, NodeType, TopicType, DTParam, ParamType
 
 
-class RandomAprilTagTurnsNode:
-    def __init__(self):
+class RandomAprilTagTurnsNode(DTROS):
+    def __init__(self, node_name):
+        super(RandomAprilTagTurnsNode, self).__init__(
+            node_name=node_name,
+            node_type=NodeType.PERCEPTION,
+            fsm_controlled=True)
+
         # Save the name of the node
-        self.node_name = rospy.get_name()
+        self.node_name = node_name
         self.turn_type = -1
-
         rospy.loginfo(f"[{self.node_name}] Initializing.")
 
         # Setup publishers
-        # self.pub_topic_a = rospy.Publisher("~topic_a",String, queue_size=1)
         self.pub_turn_type = rospy.Publisher("~turn_type", Int16, queue_size=1, latch=True)
         self.pub_id_and_type = rospy.Publisher("~turn_id_and_type", TurnIDandType, queue_size=1, latch=True)
+        self.pub_intersection_go = rospy.Publisher("~intersection_go", BoolStamped, queue_size=1)
 
         # Setup subscribers
-        # self.sub_topic_b = rospy.Subscriber("~topic_b", String, self.cbTopic)
-        self.sub_topic_mode = rospy.Subscriber("~mode", FSMState, self.cbMode, queue_size=1)
-        # self.fsm_mode = None #TODO what is this?
         self.sub_topic_tag = rospy.Subscriber("~tag", AprilTagsWithInfos, self.cbTag, queue_size=1)
-
-        # Read parameters
-        self.pub_timestep = self.setupParameter("~pub_timestep", 1.0)
-        # Create a timer that calls the cbTimer function every 1.0 second
-        # self.timer = rospy.Timer(rospy.Duration.from_sec(self.pub_timestep),self.cbTimer)
 
         rospy.loginfo(f"[{self.node_name}] Initialzed.")
 
-        self.rate = rospy.Rate(30)  # 10hz
-
-    def cbMode(self, mode_msg):
-        # print mode_msg
-        # TODO PUBLISH JUST ONCE
-        self.fsm_mode = mode_msg.state
-        if self.fsm_mode != mode_msg.INTERSECTION_CONTROL:
-            self.turn_type = -1
-            self.pub_turn_type.publish(self.turn_type)
-            # rospy.loginfo("Turn type now: %i" %(self.turn_type))
 
     def cbTag(self, tag_msgs):
-        if (
-            self.fsm_mode == "INTERSECTION_CONTROL"
-            or self.fsm_mode == "INTERSECTION_COORDINATION"
-            or self.fsm_mode == "INTERSECTION_PLANNING"
-        ):
-            # loop through list of april tags
-
-            # filter out the nearest apriltag
+            # loop through list of april tags to
+            # find the nearest apriltag
             dis_min = 999
             idx_min = -1
             for idx, taginfo in enumerate(tag_msgs.infos):
                 if taginfo.tag_type == taginfo.SIGN:
-                    tag_det = (tag_msgs.detections)[idx]
-                    pos = tag_det.transform.translation
-                    distance = math.sqrt(pos.x**2 + pos.y**2 + pos.z**2)
-                    if distance < dis_min:
-                        dis_min = distance
-                        idx_min = idx
+                    # we need to make sure it's a sign that tells us topology
+                    if taginfo.traffic_sign_type in {
+                        taginfo.NO_RIGHT_TURN,
+                        taginfo.LEFT_T_INTERSECT,
+                        taginfo.NO_LEFT_TURN,
+                        taginfo.RIGHT_T_INTERSECT,
+                        taginfo.T_INTERSECTION,
+                        taginfo.FOUR_WAY
+                    }:
+                        tag_det = (tag_msgs.detections)[idx]
+                        pos = tag_det.transform.translation
+                        distance = math.sqrt(pos.x**2 + pos.y**2 + pos.z**2)
+                        if distance < dis_min:
+                            dis_min = distance
+                            idx_min = idx
 
-            if idx_min != -1:
+            if idx_min == -1:
+                rospy.logwarn("[RANDOM_APRIL_TAG_TURNS_NODE]: Unable to determine available turns at intersection"
+                              "no appropriate signs detected")
+            else:
                 taginfo = (tag_msgs.infos)[idx_min]
 
                 availableTurns = []
@@ -84,7 +77,7 @@ class RandomAprilTagTurnsNode:
                     availableTurns = [0, 1, 2]
                 elif signType == taginfo.T_INTERSECTION:
                     availableTurns = [0, 2]
-                rospy.loginfo(f"[{self.node_name}] reports Available turns are: [{availableTurns}]")
+                # rospy.loginfo(f"[{self.node_name}] reports Available turns are: [{availableTurns}]")
                 # now randomly choose a possible direction
                 if len(availableTurns) > 0:
                     randomIndex = numpy.random.randint(len(availableTurns))
@@ -97,8 +90,10 @@ class RandomAprilTagTurnsNode:
                     id_and_type_msg.turn_type = self.turn_type
                     self.pub_id_and_type.publish(id_and_type_msg)
 
-                    # rospy.loginfo("possible turns %s." %(availableTurns))
-                    # rospy.loginfo("Turn type now: %i" %(self.turn_type))
+                    intersection_go_msg = BoolStamped()
+                    intersection_go_msg.header = tag_msgs.header
+                    intersection_go_msg.data = True
+                    self.pub_intersection_go.publish(intersection_go_msg)
 
     def setupParameter(self, param_name, default_value):
         value = rospy.get_param(param_name, default_value)
@@ -112,10 +107,10 @@ class RandomAprilTagTurnsNode:
 
 if __name__ == "__main__":
     # Initialize the node with rospy
-    rospy.init_node("random_april_tag_turns_node", anonymous=False)
+    # rospy.init_node("random_april_tag_turns_node", anonymous=False)
 
     # Create the NodeName object
-    node = RandomAprilTagTurnsNode()
+    node = RandomAprilTagTurnsNode(node_name="random_april_tag_turns_node")
 
     # Setup proper shutdown behavior
     rospy.on_shutdown(node.on_shutdown)

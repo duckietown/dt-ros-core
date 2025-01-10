@@ -1,0 +1,5 @@
+version: 1.0
+renderer_assignments:
+  renderer_0:
+    entities:
+      - map_0/vehicle_0

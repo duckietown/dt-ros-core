@@ -1,0 +1,6 @@
+version: 1.0
+vehicle_dynamics:
+  map_0/vehicle_0:
+      commands_delay: 0.0
+      motor_constant_right: 27.0
+      motor_constant_left: 27.0

@@ -15,7 +15,9 @@ from turbojpeg import TurboJPEG
 
 class RectifierNode(DTROS):
     def __init__(self, node_name):
-        super().__init__(node_name, node_type=NodeType.PERCEPTION, fsm_controlled=True)
+        super().__init__(node_name,
+                         node_type=NodeType.PERCEPTION,
+                         fsm_controlled=True)
 
         # parameters
         self.publish_freq = DTParam("~publish_freq", -1)

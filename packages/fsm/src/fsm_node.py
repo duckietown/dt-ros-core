@@ -46,11 +46,14 @@ class FSMNode:
 
         for node_name, service_name in list(nodes.items()):
             rospy.loginfo(f"FSM waiting for service {service_name}")
-            rospy.wait_for_service(
-                service_name, timeout=10.0
-            )  #  Not sure if there is a better way to do this
-            self.srv_dict[node_name] = rospy.ServiceProxy(service_name, SetBool)
-            rospy.loginfo(f"FSM found service {service_name}")
+            try:
+                rospy.wait_for_service(
+                    service_name, timeout=10.0
+                )  #  Not sure if there is a better way to do this
+                self.srv_dict[node_name] = rospy.ServiceProxy(service_name, SetBool)
+                rospy.loginfo(f"FSM found service {service_name}")
+            except rospy.ROSException as e:
+                rospy.logwarn(f"{e}")
 
         # to change the LEDs
         self.changePattern = rospy.ServiceProxy("~set_pattern", ChangePattern)

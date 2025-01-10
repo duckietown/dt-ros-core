@@ -1,0 +1,7 @@
+# path to model is by default relative to the package
+model_name: "baseline"
+dt_token: ""
+debug: True
+n_frames_skipped: 1
+# `scor` is the confidence score of a prediction [True for all of them]
+filter_by_scores: True

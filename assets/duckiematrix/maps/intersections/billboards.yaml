@@ -1,0 +1,6 @@
+version: 1.0
+billboards:
+  map_0/billboard_1:
+    graphics: ~
+  map_0/billboard_2:
+    graphics: ~

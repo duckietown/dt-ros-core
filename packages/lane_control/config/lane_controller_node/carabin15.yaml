@@ -1,0 +1,31 @@
+#lane_control/lane_controller_node
+v_bar: 0.30
+k_d: -10.0
+k_theta: -7.0
+k_Id: -10.0
+k_Iphi: 0.0
+#Broken up the 'theta_thres' for more finer tuning 
+theta_thres_max: 0.75  #0.523
+theta_thres_min: -0.5
+d_thres: 0.2615
+d_offset: 0.0
+
+omega_ff: 0
+
+integral_bounds:
+  d:
+    top: 0.3
+    bot: -0.3
+  phi:
+    top: 1.2
+    bot: -1.2
+
+# TODO: lane filter should publish this information
+d_resolution: 0.011
+phi_resolution: 0.051
+
+stop_line_slowdown:
+  start: 0.4
+  end: 0.1
+
+verbose: 0
