@@ -51,11 +51,10 @@ class LaneControllerNode(DTROS):
     def __init__(self, node_name):
 
         # Initialize the DTROS parent class
-        super(LaneControllerNode, self).__init__(
-            node_name=node_name,
-            node_type=NodeType.PERCEPTION,
-            fsm_controlled=False
-        )
+        super(LaneControllerNode, self).__init__(node_name=node_name, node_type=NodeType.PERCEPTION,
+                                                 fsm_controlled=True)
+
+        self._veh = rospy.get_param("~veh")
 
         # Add the node parameters to the parameters dictionary
         # TODO: MAKE TO WORK WITH NEW DTROS PARAMETERS
@@ -69,10 +68,7 @@ class LaneControllerNode(DTROS):
         self.params["~k_Iphi"] = DTParam(
             "~k_Iphi", param_type=ParamType.FLOAT, min_value=-100.0, max_value=100.0
         )
-        #self.params["~theta_thres"] = rospy.get_param("~theta_thres", None)
-        #Breaking up the self.params["~theta_thres"] parameter for more finer tuning of phi
-        self.params["~theta_thres_min"] = DTParam("~theta_thres_min", param_type=ParamType.FLOAT, min_value=-100.0, max_value=100.0)  #SUGGESTION mandatorizing the use of DTParam inplace of rospy.get_param for parameters in the entire dt-core repository as it allows active tuning while Robot is in action.
-        self.params["~theta_thres_max"] = DTParam("~theta_thres_max", param_type=ParamType.FLOAT, min_value=-100.0, max_value=100.0)
+        self.params["~theta_thres"] = rospy.get_param("~theta_thres", None)
         self.params["~d_thres"] = rospy.get_param("~d_thres", None)
         self.params["~d_offset"] = rospy.get_param("~d_offset", None)
         self.params["~integral_bounds"] = rospy.get_param("~integral_bounds", None)
@@ -81,6 +77,8 @@ class LaneControllerNode(DTROS):
         self.params["~omega_ff"] = rospy.get_param("~omega_ff", None)
         self.params["~verbose"] = rospy.get_param("~verbose", None)
         self.params["~stop_line_slowdown"] = rospy.get_param("~stop_line_slowdown", None)
+
+        self._traffic_mode = DTParam(f"/{self._veh}/behavior/traffic_mode", None)
 
         # Need to create controller object before updating parameters, otherwise it will fail
         self.controller = LaneController(self.params)
@@ -137,12 +135,9 @@ class LaneControllerNode(DTROS):
         Args:
             msg(:obj:`StopLineReading`): Message containing information about the virtual obstacle stopline.
         """
-        self.obstacle_stop_line_distance = np.sqrt(msg.stop_pose.x**2 + msg.stop_pose.y**2)
+        self.obstacle_stop_line_distance = np.sqrt(msg.stop_line_point.x**2 + msg.stop_line_point.y**2)
         self.obstacle_stop_line_detected = msg.stop_line_detected
         self.at_stop_line = msg.at_stop_line
-        if not self.obstacle_stop_line_detected:
-            self.obstacle_stop_line_distance = None
-
 
     def cbStopLineReading(self, msg):
         """Callback storing current distance to the next stopline, if one is detected.
@@ -150,12 +145,9 @@ class LaneControllerNode(DTROS):
         Args:
             msg (:obj:`StopLineReading`): Message containing information about the next stop line.
         """
-        self.stop_line_distance = -msg.stop_pose.x
+        self.stop_line_distance = np.sqrt(msg.stop_line_point.x**2 + msg.stop_line_point.y**2)
         self.stop_line_detected = msg.stop_line_detected
         self.at_obstacle_stop_line = msg.at_stop_line
-        if not self.stop_line_detected:
-            self.stop_line_distance = None
-
 
     def cbMode(self, fsm_state_msg):
 
@@ -247,6 +239,10 @@ class LaneControllerNode(DTROS):
 
             # For feedforward action (i.e. during intersection navigation)
             omega += self.params["~omega_ff"]
+
+        # mirror the control if left-hand traffic mode is set
+        if self._traffic_mode.value == "LHT":
+            omega *= -1.0
 
         # Initialize car control msg, add header from input message
         car_control_msg = Twist2DStamped()

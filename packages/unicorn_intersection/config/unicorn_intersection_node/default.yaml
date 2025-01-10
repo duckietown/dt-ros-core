@@ -15,10 +15,11 @@ canonical_goal_pose_left: {
   theta: 1.57,
 }
 
-canonical_goal_pose_straight: {
-  x: 0.6,
-  y: 0.0,
-  theta: 0.0,
-}
+omega_min_left: 0.2
+omega_max_left: 0.6
+omega_min_straight: -1
+omega_max_straight: 1
+omega_min_right: -2.5
+omega_max_right: 999
 
 debug_dir: -1
