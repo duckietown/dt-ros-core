@@ -20,12 +20,6 @@ from dt_computer_vision.ground_projection import GroundProjector
 from dt_computer_vision.camera.homography import Homography, HomographyToolkit
 from duckietown.dtros import DTROS, NodeType
 
-# FIXME: Is this still used?
-
-# @dataclass
-# class ImageProjectorConfig:
-#     roi : RegionOfInterest
-#     ppm : int
 
 
 class GroundProjectionNode(DTROS):
@@ -230,7 +224,6 @@ class GroundProjectionNode(DTROS):
                 self._first_processing_done = True
 
             if self.pub_debug_road_view_img.get_num_connections() > 0:
-                #return  # TODO: Reimplement using debug_image from dt_computer_vision
                 debug_image_msg = self.bridge.cv2_to_compressed_imgmsg(
                     debug_image(colored_segments,(300, 300), grid_size=6, s_segment_thickness=5)
                 )
