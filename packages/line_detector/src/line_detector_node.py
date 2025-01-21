@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 import json
-
+from typing import List, Dict
 import numpy as np
 import cv2
 import rospy
 from cv_bridge import CvBridge
 from sensor_msgs.msg import CompressedImage, Image
-from duckietown_msgs.msg import Segment, SegmentList, AntiInstagramThresholds
-from line_detector import LineDetector, ColorRange, plotSegments, plotMaps
+from duckietown_msgs.msg import Segment as SegmentMsg, SegmentList, AntiInstagramThresholds
+from dt_computer_vision.line_detection import LineDetector, ColorRange, Detections
+from dt_computer_vision.line_detection.rendering import draw_segments, draw_maps
 from image_processing.anti_instagram import AntiInstagram
 
 from duckietown.dtros import DTROS, NodeType, TopicType, DTParam
@@ -44,9 +45,6 @@ class LineDetectorNode(DTROS):
         ~debug/segments/compressed (:obj:`sensor_msgs.msg.CompressedImage`): Debug topic with the segments drawn on the input image
         ~debug/edges/compressed (:obj:`sensor_msgs.msg.CompressedImage`): Debug topic with the Canny edges drawn on the input image
         ~debug/maps/compressed (:obj:`sensor_msgs.msg.CompressedImage`): Debug topic with the regions falling in each color range drawn on the input image
-        ~debug/ranges_HS (:obj:`sensor_msgs.msg.Image`): Debug topic with a histogram of the colors in the input image and the color ranges, Hue-Saturation projection
-        ~debug/ranges_SV (:obj:`sensor_msgs.msg.Image`): Debug topic with a histogram of the colors in the input image and the color ranges, Saturation-Value projection
-        ~debug/ranges_HV (:obj:`sensor_msgs.msg.Image`): Debug topic with a histogram of the colors in the input image and the color ranges, Hue-Value projection
 
     """
 
@@ -77,7 +75,7 @@ class LineDetectorNode(DTROS):
         self.detector = LineDetector(**self._line_detector_parameters)
 
         # Update the color ranges objects
-        self.color_ranges = {}
+        self.color_ranges: Dict[str, ColorRange] = {}
         self.on_colors_range_change()
         self._colors.register_update_callback(self.on_colors_range_change)
 
@@ -94,16 +92,6 @@ class LineDetectorNode(DTROS):
         self.pub_d_maps = rospy.Publisher(
             "~debug/maps/compressed", CompressedImage, queue_size=1, dt_topic_type=TopicType.DEBUG
         )
-        # these are not compressed because compression adds undesired blur
-        self.pub_d_ranges_HS = rospy.Publisher(
-            "~debug/ranges_HS", Image, queue_size=1, dt_topic_type=TopicType.DEBUG
-        )
-        self.pub_d_ranges_SV = rospy.Publisher(
-            "~debug/ranges_SV", Image, queue_size=1, dt_topic_type=TopicType.DEBUG
-        )
-        self.pub_d_ranges_HV = rospy.Publisher(
-            "~debug/ranges_HV", Image, queue_size=1, dt_topic_type=TopicType.DEBUG
-        )
 
         # Subscribers
         self.sub_image = rospy.Subscriber(
@@ -115,6 +103,8 @@ class LineDetectorNode(DTROS):
         )
 
         # Check if CUDA is available
+        # LP: I think for this to work we need the base image to have CUDA
+        #     which it currently doesn't
         if cv2.cuda.getCudaEnabledDeviceCount() > 0:
             self.loginfo("Using CUDA GPU for line detection.")
             self.cuda_enabled = True
@@ -187,11 +177,22 @@ class LineDetectorNode(DTROS):
         if self._traffic_mode.value == "LHT":
             gpu_image = np.fliplr(gpu_image)
 
+        color_order = ["YELLOW", "WHITE", "RED"]
+        colors_to_detect = [self.color_ranges[c] for c in color_order]
         # Extract the line segments for every color
-        self.detector.setImage(gpu_image)
-        detections = {
-            color: self.detector.detectLines(ranges) for color, ranges in list(self.color_ranges.items())
-        }
+        color_detections: List[Detections] = (
+            self.detector.detect(gpu_image, colors_to_detect))
+
+        dets: Dict[str, dict] ={}
+        for i, detections in enumerate(color_detections):
+            color = color_order[i]
+            # pack detections in a dictionary
+            dets[color] = {
+                "lines": detections.lines.tolist(),
+                "centers": detections.centers.tolist(),
+                "normals": detections.normals.tolist(),
+                "color": self.color_ranges[color].representative
+            }
 
         # Construct a SegmentList
         segment_list = SegmentList()
@@ -209,18 +210,18 @@ class LineDetectorNode(DTROS):
         )
 
         # Fill in the segment_list with all the detected segments
-        for color, det in list(detections.items()):
+        for color, det in dets.items():
             # Get the ID for the color from the Segment msg definition
             # Throw and exception otherwise
-            if len(det.lines) > 0 and len(det.normals) > 0:
+            if len(det["lines"]) > 0 and len(det["normals"]) > 0:
                 try:
-                    color_id = getattr(Segment, color)
-                    lines_normalized = (det.lines + arr_cutoff) * arr_ratio
+                    color_id = getattr(SegmentMsg, color)
+                    lines_normalized = (det["lines"] + arr_cutoff) * arr_ratio
                     segment_list.segments.extend(
-                        self._to_segment_msg(lines_normalized, det.normals, color_id)
+                        self._to_segment_msg(lines_normalized, det["normals"], color_id)
                     )
                 except AttributeError:
-                    self.logerr(f"Color name {color} is not defined in the Segment message")
+                    self.logerr(f"Color name {color} is not defined in the Segment type")
 
         # Publish the message
         self.pub_lines.publish(segment_list)
@@ -234,8 +235,14 @@ class LineDetectorNode(DTROS):
 
         # If there are any subscribers to the debug topics, generate a debug image and publish it
         if self.pub_d_segments.get_num_connections() > 0:
-            colorrange_detections = {self.color_ranges[c]: det for c, det in list(detections.items())}
-            debug_img = plotSegments(image, colorrange_detections)
+            debug_img = draw_segments(image,
+                                      {
+                                        self.color_ranges["YELLOW"]: color_detections[0],
+                                        self.color_ranges["WHITE"]: color_detections[1],
+                                        self.color_ranges["RED"]: color_detections[2]
+                                      }
+                                    )
+
             # mirror the image if left-hand traffic mode is set
             if self._traffic_mode.value == "LHT":
                 debug_img = np.fliplr(debug_img)
@@ -244,7 +251,11 @@ class LineDetectorNode(DTROS):
             self.pub_d_segments.publish(debug_image_msg)
 
         if self.pub_d_edges.get_num_connections() > 0:
-            canny_edges = self.detector.canny_edges
+            canny_edges = self.detector.find_edges(image,
+                                                   self.detector.canny_thresholds[0],
+                                                   self.detector.canny_thresholds[1],
+                                                   self.detector.canny_aperture_size
+                                                   )
             # mirror the image if left-hand traffic mode is set
             if self._traffic_mode.value == "LHT":
                 canny_edges = np.fliplr(canny_edges)
@@ -253,8 +264,14 @@ class LineDetectorNode(DTROS):
             self.pub_d_edges.publish(debug_image_msg)
 
         if self.pub_d_maps.get_num_connections() > 0:
-            colorrange_detections = {self.color_ranges[c]: det for c, det in list(detections.items())}
-            debug_img = plotMaps(image, colorrange_detections)
+#            colorrange_detections = {self.color_ranges[c]: det for c, det in list(detections.items())}
+            debug_img = draw_maps(image,
+                                  {
+                                      self.color_ranges["YELLOW"]: color_detections[0],
+                                      self.color_ranges["WHITE"]: color_detections[1],
+                                      self.color_ranges["RED"]: color_detections[2]
+                                  }
+                                  )
             # mirror the image if left-hand traffic mode is set
             if self._traffic_mode.value == "LHT":
                 debug_img = np.fliplr(debug_img)
@@ -262,13 +279,6 @@ class LineDetectorNode(DTROS):
             debug_image_msg.header = image_msg.header
             self.pub_d_maps.publish(debug_image_msg)
 
-        for channels in ["HS", "SV", "HV"]:
-            publisher = getattr(self, f"pub_d_ranges_{channels}")
-            if publisher.get_num_connections() > 0:
-                debug_img = self._plot_ranges_histogram(channels)
-                debug_image_msg = self.bridge.cv2_to_imgmsg(debug_img, encoding="bgr8")
-                debug_image_msg.header = image_msg.header
-                publisher.publish(debug_image_msg)
 
     @staticmethod
     def _to_segment_msg(lines, normals, color):
@@ -288,7 +298,7 @@ class LineDetectorNode(DTROS):
         """
         segment_msg_list = []
         for x1, y1, x2, y2, norm_x, norm_y in np.hstack((lines, normals)):
-            segment = Segment()
+            segment = SegmentMsg()
             segment.color = color
             segment.pixels_normalized[0].x = x1
             segment.pixels_normalized[0].y = y1
