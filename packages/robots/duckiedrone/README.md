@@ -85,10 +85,10 @@ Check repo README for how to build, run and verify results.
 
 ### Minimal altitude PID
 * Actions:
-  * From a `ente` shell update the Duckiedrone with `dts duckiebot update [ROBOT_NAME]`
+  * From a `ente` shell update the Duckiedrone with `dts duckiebot update [hostname]`
   * Clone repo to local machine
   * (*Optional*) Build: `dts devel build`
-  * Run: `dts devel run -R [ROBOT_NAME] -c "python3 packages/robots/duckiedrone/pid_controller/scripts/altitude_pid_node.py"`
+  * Run: `dts devel run -R [hostname] -c "python3 packages/robots/duckiedrone/pid_controller/scripts/altitude_pid_node.py"`
 
 * Expected outcome:
   * **[DANGER]**: The drone will drift on the x-y (horizontal) plane, make sure to have enough space around it.
