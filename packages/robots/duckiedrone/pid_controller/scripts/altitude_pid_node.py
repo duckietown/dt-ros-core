@@ -22,13 +22,14 @@ from pymavlink import mavutil # Needed for command message definitions
 import time
 import math
 import matplotlib.pyplot as plt
-
+import os
 # The collections module has been reorganized in Python 3.12 and the abstract base
 # classes have been moved to the collections.abc module. This line is necessary to
 # fix a bug in importing the MutableMapping class in `dronekit`.
 collections.MutableMapping = collections.abc.MutableMapping
 
 PID_SAMPLE_RATE = 50 # [Hz]
+ROBOT_NAME = os.environ.get('VEHICLE_NAME', None)
 target_altitude = 1
 range_zeroing_offset = 0.0
 error_data = []
@@ -36,11 +37,8 @@ error_data = []
 # Connect to the Vehicle
 connection_string = rospy.get_param('~connection_string', None)
 sitl = None
-connection_string = "tcp:192.168.0.96:5760"
-if not connection_string:
-    import dronekit_sitl
-    sitl = dronekit_sitl.start_default()
-    connection_string = sitl.connection_string()
+
+connection_string = F"tcp:{ROBOT_NAME}.local:5760"
 
 print('Connecting to vehicle on: %s' % connection_string)
 vehicle = connect(connection_string)
@@ -61,7 +59,7 @@ def range_callback(msg : Range):
     error_data.append(error)
 
     thrust = pid_controller(altitude)
-    print(f"Thrust: {thrust}\n Error: {error}\n")
+    print(f"Thrust [0-1]: {thrust}\n Error [m]: {error}\n")
     # set_attitude(thrust=0)
     set_attitude(thrust=thrust)
 
@@ -80,7 +78,7 @@ def altitude_controller():
 
     print("Taking off!")
 
-    rospy.Subscriber('/endeavour/bottom_tof_driver_node/range', Range, range_callback, queue_size=1)
+    rospy.Subscriber(f"/{ROBOT_NAME}/bottom_tof_driver_node/range", Range, range_callback, queue_size=1)
     rospy.spin()
 
 def send_attitude_target(roll_angle=0.0, pitch_angle=0.0, yaw_angle=None, yaw_rate=0.0, use_yaw_rate=False, thrust=0.5):
