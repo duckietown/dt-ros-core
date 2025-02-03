@@ -7,13 +7,14 @@ import rospy
 import tf
 from duckietown_msgs.msg import DroneControl as RC, PIDDiagnostics as PIDDebugInfo, PIDState
 from mavros_msgs.msg import State as FCUState
+from mavros_msgs.srv import CommandBool, SetMode
 from geometry_msgs.msg import Pose, Twist
 from nav_msgs.msg import Odometry
 from std_msgs.msg import Empty, Bool, Float32
 from std_srvs.srv import SetBool, SetBoolResponse, SetBoolRequest
 
 from duckietown.dtros import DTROS, DTParam, NodeType, ParamType
-from pid_class import PID, PIDaxis
+from pid_class import PID as dtPID, PIDaxis
 from three_dim_vec import Position, Velocity, Error, RPY
 
 class DroneMode(IntEnum):
@@ -71,7 +72,11 @@ class PIDControllerNode(DTROS):
         self.desired_velocity_start_time = None
         self.desired_yaw_velocity_start_time = None
 
-        # Primary PID: the error used for the PID which is vx, vy, z where vx and
+        # Initialize the primary PID
+        self.pid = dtPID()
+        self.pid.thrust.setpoint = self.hover_height
+
+        # Initialize the error used for the PID which is vx, vy, z where vx and
         # vy are velocities, and z is the error in the altitude of the drone
         self.pid = PID(
                 roll=PIDaxis(
@@ -132,7 +137,7 @@ class PIDControllerNode(DTROS):
         # publishers
         self.cmd_pub = rospy.Publisher(
             "~commands",
-            RC,
+            AttitudeTarget,
             queue_size=1
         )
         self.debug_pub = rospy.Publisher("~debug/pid", PIDDebugInfo, queue_size=10)
@@ -165,8 +170,16 @@ class PIDControllerNode(DTROS):
         # TODO: transform reset_transform and position_control switch into services
         rospy.Subscriber("reset_transform", Empty, self.reset_callback, queue_size=1)
         rospy.Subscriber("~position_control", Bool, self.position_control_callback, queue_size=1)
-        rospy.Service("~takeoff", SetBool, self.takeoff_srv)
 
+
+        # Create a service proxy
+        rospy.wait_for_service("~set_mode")
+        self.set_mode_service = rospy.ServiceProxy("~set_mode", SetMode)
+        self.set_mode(mode="GUIDED_NOGPS")
+
+        rospy.Service("~takeoff", SetBool, self.takeoff_srv)
+        rospy.Service("~land", SetBool, self.land_srv)
+        
         # publish internal desired pose (hover pose)
         self._desired_height_pub.publish(Float32(self.desired_position.z))
 
@@ -229,6 +242,22 @@ class PIDControllerNode(DTROS):
             self.current_mode = DroneMode.ARMED
         return SetBoolResponse(success=True, message="Mode set to %s" % self.current_mode)
     
+    def land_srv(self, req):
+        self.set_mode_service(custom_mode="LAND")
+        return SetBoolResponse(success=True, message="Mode set to LAND")
+
+    def set_mode(self, mode : str):
+        # Call the service
+        response = self.set_mode_service(custom_mode=mode)
+        
+        # Check the response
+        if response.mode_sent:
+            rospy.loginfo("Successfully called the set mode service")
+        else:
+            rospy.logwarn("Failed to call the set mode service")
+
+    # ROS SUBSCRIBER CALLBACK METHODS
+    #################################
     def current_state_callback(self, state : Odometry):
         """ Store the drone's current state for calculations """
         self.previous_state = self.current_state

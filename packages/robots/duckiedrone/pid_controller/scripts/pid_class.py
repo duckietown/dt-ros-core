@@ -5,7 +5,7 @@ import logging
 from typing import List, Optional, Tuple
 
 import numpy as np
-
+from simple_pid import PID as SimplePID
 from three_dim_vec import Error
 from duckietown_msgs.msg import PIDState
 
@@ -91,45 +91,56 @@ class PIDaxis:
 
 # noinspection DuplicatedCode
 class PID:
+    height_factor = 1.238
+    battery_factor = 0.75
+    PID_SAMPLE_RATE = 50
+    TARGET_ALTITUDE = 1.0
 
-    def __init__(self,
-                roll=PIDaxis(
-                     4.0, 1.0, 0.0,
-                     control_range=(-inf, +inf),
-                     midpoint=0,
-                     i_range=(-100, 100)
-                 ),
-                 roll_low=PIDaxis(
-                     0.0, 0.0, 0.0,
-                     control_range=(-inf, +inf),
-                     midpoint=0,
-                     i_range=(-150, 150)
-                 ),
-                 pitch=PIDaxis(
-                     4.0, 1.0, 0.0,
-                     control_range=(1400, 1600),
-                     midpoint=1500,
-                     i_range=(-100, 100)
-                 ),
-                 pitch_low=PIDaxis(
-                     0.0, 0.5, 0.0,
-                     control_range=(1400, 1600),
-                     midpoint=1500,
-                     i_range=(-150, 150)
-                 ),
-
-                 yaw=PIDaxis(0.0, 0.0, 0.0),
-
-                 throttle=PIDaxis(
-                     kp=30.0,
-                     ki=15.0,
-                     kd=10.0,
-                     i_range=(-100, 100),
-                     control_range=(1200, 1600),
-                     d_range=(-100, 100),
-                     midpoint=1500,
-                 ),
-                 ):
+    def __init__(
+        self,
+        roll=PIDaxis(
+            4.0,
+            1.0,
+            0.0,
+            control_range=(1400, 1600),
+            midpoint=1500,
+            i_range=(-100, 100),
+        ),
+        roll_low=PIDaxis(
+            0.0,
+            0.5,
+            0.0,
+            control_range=(1400, 1600),
+            midpoint=1500,
+            i_range=(-150, 150),
+        ),
+        pitch=PIDaxis(
+            4.0,
+            1.0,
+            0.0,
+            control_range=(1400, 1600),
+            midpoint=1500,
+            i_range=(-100, 100),
+        ),
+        pitch_low=PIDaxis(
+            0.0,
+            0.5,
+            0.0,
+            control_range=(1400, 1600),
+            midpoint=1500,
+            i_range=(-150, 150),
+        ),
+        yaw=PIDaxis(0.0, 0.0, 0.0),
+        thrust=SimplePID(
+            0.10,
+            0.05,
+            0.04,
+            setpoint=TARGET_ALTITUDE,
+            sample_time=1 / PID_SAMPLE_RATE,
+            output_limits=(0, 1),
+            time_fn= lambda: rospy.get_time()
+        ),
+    ):
         self.trim_controller_cap_plane = 0.05
         self.trim_controller_thresh_plane = 0.0001
 
@@ -144,7 +155,7 @@ class PID:
         self.trim_controller_cap_throttle = 5.0
         self.trim_controller_thresh_throttle = 5.0
 
-        self.throttle = throttle
+        self.thrust = thrust
 
         self._t = None
 
@@ -162,14 +173,28 @@ class PID:
         self._t = None
 
         # reset individual PIDs
-        for pid in [self.roll, self.roll_low, self.pitch, self.pitch_low, self.throttle]:
+        for pid in [self.roll, self.roll_low, self.pitch, self.pitch_low, self.thrust]:
             if pid is not None:
                 pid.reset()
 
-    def step(self, error : Error, t :float, cmd_yaw_velocity=0) -> List[int]:
-        """ Compute the control variables from the error using the step methods
-        of each axis pid.
+    def step(self, error : Error, t :float, cmd_yaw_velocity=0) -> List:
         """
+        Compute the control variables from the error using the step methods
+        of each axis PID controller.
+
+        Parameters:
+        error (object): An object containing the error values for each axis (x, y, z).
+        cmd_yaw_velocity (float, optional): The commanded yaw velocity. Defaults to 0.
+
+        list: A list of control variables [roll, pitch, yaw, thrust].
+
+        Notes:
+        - The first time this method is called, it prevents a time spike by setting the elapsed time to 1.
+        - The roll and pitch commands are computed using the `compute_axis_command` method.
+        - The yaw command is computed by adding the commanded yaw velocity to a base value of 1500.
+        - The thrust command is computed using the `thrust` method with the z-axis error and thrust setpoint.
+        """
+
         # First time around prevent time spike
         if self._t is None:
             time_elapsed = 1
@@ -196,19 +221,14 @@ class PID:
 
         cmd_yaw = 1500 + cmd_yaw_velocity
 
-        cmd_throttle = self.compute_axis_command(
-            error.z,
-            time_elapsed,
-            pid_low=None,
-            pid=self.throttle,
-            trim_controller=self.trim_controller_cap_throttle
-        )
+        cmd_thrust = self.thrust(error.z + self.thrust.setpoint)
+
 
         return [
-            self.xy_plane_cmd_to_rc_cmd(np.degrees(cmd_roll)),
-            self.xy_plane_cmd_to_rc_cmd(np.degrees(cmd_pitch)),
+            1500, # TODO: this should return a commanded attitude rather than RC commands!
+            1500,
             cmd_yaw,
-            int(cmd_throttle),
+            cmd_thrust,
         ]
 
     def compute_axis_command(
@@ -240,38 +260,3 @@ class PID:
             cmd = pid.step(error, time_elapsed)
         
         return cmd
-
-    @staticmethod
-    def xy_plane_cmd_to_rc_cmd(
-        commanded_angle: float,
-        rc_max: int = 1900,
-        rc_min: int = 1100,
-        rc_midpoint: int = 1500,
-        max_allowed_angle: float = 30,
-    ) -> int:
-        """
-        Map the commanded angle to a roll and pitch RC command according to the Ardupilot convention.
-        The RC command value is calculated using the following formula:
-
-            rc_command = rc_midpoint + (commanded_angle/max_allowed_angle) * (rc_max - rc_min)
-
-        .. math::
-
-            \text{RC command} = \text{rc_midpoint} + \left( \frac{\text{cmd}}{\text{max_allowed_angle}} \right) \times (\text{rc_max} - \text{rc_min})
-
-
-        Args:
-            cmd (float): The commanded angle in degrees.
-            rc_max (int, optional): The maximum RC command value. Defaults to 1900.
-            rc_min (int, optional): The minimum RC command value. Defaults to 1100.
-            rc_midpoint (int, optional): The midpoint RC command value. Defaults to 1500.
-            theta_max (float, optional): The maximum angle in degrees. Defaults to 30.
-
-        Returns:
-            int: The corresponding RC command value.
-
-        """
-
-        return int(
-            commanded_angle / max_allowed_angle * (rc_max - rc_min) + rc_midpoint
-        )

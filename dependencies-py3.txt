@@ -10,7 +10,7 @@ compmake-z6==6.1.5
 
 # duckiedrone state estimator
 filterpy==1.4.5
-
+simple-pid
 
 # -- Duckietown --
 

@@ -11,7 +11,7 @@ parts:
           - file: part_1/chapter_a/index
             sections:
                 - file: part_1/chapter_a/section_1
-    - caption: PART_TWO
+    - caption: Duckiedrone Nodes
       maxdepth: 2
       numbered: False
       chapters:
