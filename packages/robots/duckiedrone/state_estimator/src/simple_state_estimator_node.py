@@ -4,7 +4,7 @@ import rospy
 
 from duckietown.dtros import NodeType, DTROS
 from sensor_msgs.msg import Range
-from geometry_msgs.msg import Point, Pose, PoseWithCovariance, TwistWithCovariance
+from geometry_msgs.msg import Point, Pose, PoseWithCovariance
 from nav_msgs.msg import Odometry
 from std_msgs.msg import Header
 

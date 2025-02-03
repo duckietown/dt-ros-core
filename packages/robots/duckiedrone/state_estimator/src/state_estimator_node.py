@@ -86,14 +86,16 @@ class StateEstimatorNode(DTROS):
 
         self.primary_estimator = DTParam("~primary", param_type=ParamType.STRING, default=primary)
         self.other_estimators = DTParam("~others", param_type=ParamType.LIST, default=others or [])
-        self.ema_params = DTParam("~ema_params", param_type=ParamType.DICT, default={})
+        self.ema_alpha_pose = DTParam("~ema_alpha_pose", param_type=ParamType.FLOAT)
+        self.ema_alpha_twist = DTParam("~ema_alpha_twist", param_type=ParamType.FLOAT)
+        self.ema_alpha_range = DTParam("~ema_alpha_range", param_type=ParamType.FLOAT)
         self._state_estimator = self.get_state_estimator() # type: ignore
 
         # Subscribers
         #############
         rospy.Subscriber('~imu', Imu, self.imu_cb)
         rospy.Subscriber('~range', Range, self.range_cb)
-        rospy.Subscriber('~twist', Odometry, self.twist_cb) # Visual odometry (i.e. optical flow)
+        rospy.Subscriber('~twist', Odometry, self.twist_cb)
         
         rospy.Subscriber('pose_topic', PoseStamped, self.pose_cb)
         
@@ -141,13 +143,14 @@ class StateEstimatorNode(DTROS):
 
         if state_estimator_class == StateEstimatorEMA:
             return StateEstimatorEMA(
-                alpha_pose=self.ema_params.value["alpha_pose"],
-                alpha_twist=self.ema_params.value["alpha_twist"],
-                alpha_range=self.ema_params.value["alpha_range"],
+                alpha_pose=self.ema_alpha_pose.value,
+                alpha_twist=self.ema_alpha_twist.value,
+                alpha_range=self.ema_alpha_range.value,
             )
 
         return state_estimator_class()
- 
+    
+
     def state_callback(self):
         """
         Callback that handles the primary estimator republishing.

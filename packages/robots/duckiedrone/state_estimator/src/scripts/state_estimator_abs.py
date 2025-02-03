@@ -45,7 +45,7 @@ class StateEstimatorAbs(ABC):
     @abstractmethod
     def process_imu(self, imu_data : Imu):
         """
-        docstring
+        Process the incoming IMU data.
         """
         pass
 
