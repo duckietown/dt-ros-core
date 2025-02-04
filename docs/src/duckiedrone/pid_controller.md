@@ -6,11 +6,10 @@ It takes as input a state estimate form the StateEstimator node, containing an e
 
 The `SET_ATTITUDE_TARGET` command is detailed [here](https://mavlink.io/en/messages/common.html#SET_ATTITUDE_TARGET). On the Ardupilot Copter firmware used on the flight controller the `thrust` field can be interpreted either as a commanded normalized thrust level or a climb rate. On the DD24 this is configured by default to be the normalized thrust.
 
-This message is published to
+The message is published to
 
 `~setpoint_raw/attitude`
 
-and remapped through a launch file to 
+and remapped through a launch file to the mavros node topic
 
-`/[ROBOT_NAME]/mavros/setpoint_raw/attitude`
-
+`/[ROBOT_NAME]/mavros/setpoint_raw/attitude`.
