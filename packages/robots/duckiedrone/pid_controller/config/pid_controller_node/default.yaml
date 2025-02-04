@@ -14,6 +14,6 @@ yaw_kp: 0.0
 yaw_ki: 0.0
 yaw_kd: 0.0
 
-throttle_kp: 30.0
-throttle_ki: 15.0
-throttle_kd: 10.0
+thrust_kp: 0.10
+thrust_ki: 0.05
+thrust_kd: 0.04

@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 
-from cmath import inf
-import logging
-from typing import List, Optional, Tuple
+from typing import Optional, Tuple
 
 import numpy as np
+import quaternion
+from quaternion import quaternion
 from simple_pid import PID as SimplePID
 from three_dim_vec import Error
-from duckietown_msgs.msg import PIDState
+import tiny_tf
+import tiny_tf.transformations
 
 class PIDaxis:
 
@@ -138,7 +139,6 @@ class PID:
             setpoint=TARGET_ALTITUDE,
             sample_time=1 / PID_SAMPLE_RATE,
             output_limits=(0, 1),
-            time_fn= lambda: rospy.get_time()
         ),
     ):
         self.trim_controller_cap_plane = 0.05
@@ -177,16 +177,18 @@ class PID:
             if pid is not None:
                 pid.reset()
 
-    def step(self, error : Error, t :float, cmd_yaw_velocity=0) -> List:
+    def step(self, error: Error, t: float, cmd_yaw_velocity=0) -> Tuple[quaternion, float]:
         """
         Compute the control variables from the error using the step methods
         of each axis PID controller.
 
         Parameters:
-        error (object): An object containing the error values for each axis (x, y, z).
+        error (Error): An object containing the error values for each axis (x, y, z).
+        t (float): The current time.
         cmd_yaw_velocity (float, optional): The commanded yaw velocity. Defaults to 0.
 
-        list: A list of control variables [roll, pitch, yaw, thrust].
+        Returns:
+        Tuple[quaternion, float]: A tuple containing the computed quaternion and thrust command.
 
         Notes:
         - The first time this method is called, it prevents a time spike by setting the elapsed time to 1.
@@ -194,8 +196,8 @@ class PID:
         - The yaw command is computed by adding the commanded yaw velocity to a base value of 1500.
         - The thrust command is computed using the `thrust` method with the z-axis error and thrust setpoint.
         """
-
-        # First time around prevent time spike
+        # First time around prevent time spike (This should be removed and 
+        # the measurement should be fed to the PID rather than the error)
         if self._t is None:
             time_elapsed = 1
         else:
@@ -221,15 +223,13 @@ class PID:
 
         cmd_yaw = 1500 + cmd_yaw_velocity
 
-        cmd_thrust = self.thrust(error.z + self.thrust.setpoint)
+        # HACK: the PID computes the error internally, this works better for the derivative term
+        cmd_thrust = self.thrust(self.thrust.setpoint-error.z)
+        
+        # TODO: verify that the convention is consistent
+        q = tiny_tf.transformations.quaternion_from_euler(cmd_roll, cmd_pitch, cmd_yaw)
 
-
-        return [
-            1500, # TODO: this should return a commanded attitude rather than RC commands!
-            1500,
-            cmd_yaw,
-            cmd_thrust,
-        ]
+        return np.quaternion(q), cmd_thrust,
 
     def compute_axis_command(
         self,
