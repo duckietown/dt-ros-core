@@ -82,3 +82,22 @@ How to run stuff, which repos are related ...
 
 ### dt-drone-vision
 Check repo README for how to build, run and verify results.
+
+### Minimal altitude PID
+* Actions:
+  * From a `ente` shell update the Duckiedrone with `dts duckiebot update [hostname]`
+  * Clone repo to local machine
+  * (*Optional*) Build: `dts devel build`
+  * Run: `dts devel run -R [hostname] -c "python3 packages/robots/duckiedrone/pid_controller/scripts/altitude_pid_node.py"`
+
+* Expected outcome:
+  * **[DANGER]**: The drone will drift on the x-y (horizontal) plane, make sure to have enough space around it.
+  * **[INFO]**: If you want to land the drone press `CTRL`+`C` to stop the script.
+  * Drone should arm and takeoff to a height of 1 m.
+  * In the console you should see a message reporting the thrust value and the range error being printed continuously:
+    
+    ```
+    Thrust [0-1]: 0.43513294704555977
+    Error [m]: 0.013999998569488525
+    ```
+  * At steady state (Error=0 m) the thrust value should be about 0.4

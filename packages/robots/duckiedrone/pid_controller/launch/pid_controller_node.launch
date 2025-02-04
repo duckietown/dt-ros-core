@@ -6,8 +6,9 @@
 
     <group ns="$(arg veh)">
         <remap from="$(arg node_name)/mode" to="flight_controller_node/mode/current" />
-        <remap from="$(arg node_name)/commands" to="fly_commands_mux_node/commands/autonomous" />
+        <remap from="$(arg node_name)/commands" to="mavros/setpoint_raw/attitude" />
         <remap from="$(arg node_name)/state" to="state_estimator_node/state" />
+        <remap from="$(arg node_name)/set_mode" to="flight_controller_node/set_mode" />
 
         <node name="$(arg node_name)" pkg="$(arg pkg_name)" type="$(arg node_name).py" output="screen">
             <rosparam command="load" file="$(find pid_controller)/config/$(arg node_name)/$(arg param_file_name).yaml"/>

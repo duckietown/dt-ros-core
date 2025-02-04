@@ -1,45 +1,50 @@
 #!/usr/bin/env python3
 
-import logging
-from typing import Optional
-import rospy
+from typing import Optional, Tuple
 
+import numpy as np
+import quaternion
+from quaternion import quaternion
+from simple_pid import PID as SimplePID
+from three_dim_vec import Error
+import tiny_tf
+import tiny_tf.transformations
 
-#####################################################
-#						PID							#
-#####################################################
 class PIDaxis:
 
     def __init__(self,
                  kp, ki, kd,
-                 i_range=None,
+                 i_range=(1000,2000),
                  d_range=None,
-                 control_range=(1000, 2000),
+                 control_range : Tuple[int] = (1000, 2000),
                  midpoint=1500,
                  smoothing=True):
-        # Tuning
+        
         self.kp = kp
         self.ki = ki
         self.kd = kd
-        # Config
+        
         self.i_range = i_range
         self.d_range = d_range
         self.control_range = control_range
+        assert control_range[0] < midpoint < control_range[1]
+    
         self.midpoint = midpoint
         self.smoothing = smoothing
-        # initial i value
+        
         self.init_i = 0.0
 
-        # Internal
+        # Internal variables
         self._old_err = None
         self._p = 0
         self.integral = self.init_i
+        
         # effective only once
         self.init_i = 0.0
         self._d = 0
         self._dd = 0
         self._ddd = 0
-
+        
     def reset(self):
         self._old_err = None
         self._p = 0
@@ -50,24 +55,24 @@ class PIDaxis:
         self._dd = 0
         self._ddd = 0
 
-    def step(self, err, time_elapsed) -> float:
-        if time_elapsed == 0:
+    def step(self, err, delta_t) -> float:
+        if delta_t <= 0:
             return 0
 
         if self._old_err is None:
             # First time around prevent d term spike
             self._old_err = err
 
-        # Find the p component
+        # Compute the p component
         self._p = err * self.kp
 
-        # Find the i component
-        self.integral += err * self.ki * time_elapsed
+        # Compute the i component
+        self.integral += err * self.ki * delta_t
         if self.i_range is not None:
-            self.integral = max(self.i_range[0], min(self.integral, self.i_range[1]))
+            self.integral = np.clip(self.integral, self.i_range[0], self.i_range[1])
 
-        # Find the d component
-        self._d = (err - self._old_err) * self.kd / time_elapsed
+        # Compute the d component
+        self._d = (err - self._old_err) * self.kd / delta_t
         if self.d_range is not None:
             self._d = max(self.d_range[0], min(self._d, self.d_range[1]))
         self._old_err = err
@@ -80,7 +85,7 @@ class PIDaxis:
 
         # Calculate control output
         raw_output = self._p + self.integral + self._d
-        output = min(max(raw_output + self.midpoint, self.control_range[0]), self.control_range[1])
+        output = np.clip(raw_output + self.midpoint, self.control_range[0], self.control_range[1])
 
         return output
 
@@ -89,50 +94,53 @@ class PIDaxis:
 class PID:
     height_factor = 1.238
     battery_factor = 0.75
+    PID_SAMPLE_RATE = 50
+    TARGET_ALTITUDE = 1.0
 
-    def __init__(self,
-                 roll=PIDaxis(
-                     4.0, 1.0, 0.0,
-                     control_range=(1400, 1600),
-                     midpoint=1500,
-                     i_range=(-100, 100)
-                 ),
-                 roll_low=PIDaxis(
-                     0.0, 0.5, 0.0,
-                     control_range=(1400, 1600),
-                     midpoint=1500,
-                     i_range=(-150, 150)
-                 ),
-
-                 pitch=PIDaxis(
-                     4.0, 1.0, 0.0,
-                     control_range=(1400, 1600),
-                     midpoint=1500,
-                     i_range=(-100, 100)
-                 ),
-                 pitch_low=PIDaxis(
-                     0.0, 0.5, 0.0,
-                     control_range=(1400, 1600),
-                     midpoint=1500,
-                     i_range=(-150, 150)
-                 ),
-
-                 yaw=PIDaxis(0.0, 0.0, 0.0),
-
-                 # Kv 2300 motors have midpoint 1300, Kv 2550 motors have midpoint 1250
-                 # height_safety_here (in the sense that the motors are limited)
-                 # 1.0, 0.5, 2.0
-                 # 1.0, 0.05, 2.0
-                 throttle=PIDaxis(
-                     5.0 / height_factor * battery_factor,
-                     0.5 / height_factor * battery_factor,
-                     10.0 / height_factor * battery_factor,
-                     i_range=(-400, 400),
-                     control_range=(1200, 1500),
-                     d_range=(-40, 40),
-                     midpoint=1500
-                 ),
-                 ):
+    def __init__(
+        self,
+        roll=PIDaxis(
+            4.0,
+            1.0,
+            0.0,
+            control_range=(1400, 1600),
+            midpoint=1500,
+            i_range=(-100, 100),
+        ),
+        roll_low=PIDaxis(
+            0.0,
+            0.5,
+            0.0,
+            control_range=(1400, 1600),
+            midpoint=1500,
+            i_range=(-150, 150),
+        ),
+        pitch=PIDaxis(
+            4.0,
+            1.0,
+            0.0,
+            control_range=(1400, 1600),
+            midpoint=1500,
+            i_range=(-100, 100),
+        ),
+        pitch_low=PIDaxis(
+            0.0,
+            0.5,
+            0.0,
+            control_range=(1400, 1600),
+            midpoint=1500,
+            i_range=(-150, 150),
+        ),
+        yaw=PIDaxis(0.0, 0.0, 0.0),
+        thrust=SimplePID(
+            0.10,
+            0.05,
+            0.04,
+            setpoint=TARGET_ALTITUDE,
+            sample_time=1 / PID_SAMPLE_RATE,
+            output_limits=(0, 1),
+        ),
+    ):
         self.trim_controller_cap_plane = 0.05
         self.trim_controller_thresh_plane = 0.0001
 
@@ -147,14 +155,16 @@ class PID:
         self.trim_controller_cap_throttle = 5.0
         self.trim_controller_thresh_throttle = 5.0
 
-        self.throttle = throttle
+        self.thrust = thrust
 
         self._t = None
 
         # Tuning values specific to each drone
         # TODO: these should be params
-        self.roll_low.init_i = 0.31
-        self.pitch_low.init_i = -1.05
+        if self.roll_low is not None:
+            self.roll_low.init_i = 0.31
+        if self.pitch_low is not None:
+            self.pitch_low.init_i = -1.05
         self.reset()
 
     def reset(self):
@@ -163,66 +173,82 @@ class PID:
         self._t = None
 
         # reset individual PIDs
-        self.roll.reset()
-        self.roll_low.reset()
-        self.pitch.reset()
-        self.pitch_low.reset()
-        self.throttle.reset()
+        for pid in [self.roll, self.roll_low, self.pitch, self.pitch_low, self.thrust]:
+            if pid is not None:
+                pid.reset()
 
-    def step(self, error, cmd_yaw_velocity=0):
-        """ Compute the control variables from the error using the step methods
-        of each axis pid.
+    def step(self, error: Error, t: float, cmd_yaw_velocity=0) -> Tuple[quaternion, float]:
         """
-        # First time around prevent time spike
+        Compute the control variables from the error using the step methods
+        of each axis PID controller.
+
+        Parameters:
+        error (Error): An object containing the error values for each axis (x, y, z).
+        t (float): The current time.
+        cmd_yaw_velocity (float, optional): The commanded yaw velocity. Defaults to 0.
+
+        Returns:
+        Tuple[quaternion, float]: A tuple containing the computed quaternion and thrust command.
+
+        Notes:
+        - The first time this method is called, it prevents a time spike by setting the elapsed time to 1.
+        - The roll and pitch commands are computed using the `compute_axis_command` method.
+        - The yaw command is computed by adding the commanded yaw velocity to a base value of 1500.
+        - The thrust command is computed using the `thrust` method with the z-axis error and thrust setpoint.
+        """
+        # First time around prevent time spike (This should be removed and 
+        # the measurement should be fed to the PID rather than the error)
         if self._t is None:
             time_elapsed = 1
         else:
-            time_elapsed = rospy.get_time() - self._t
+            time_elapsed = t - self._t
 
-        self._t = rospy.get_time()
+        self._t = t
 
-        # Compute roll command
-        ######################
-        # if the x velocity error is within the threshold
-        cmd_r = self.compute_axis_command(
-            error.x,
+        cmd_roll = self.compute_axis_command(
+            error.y,
             time_elapsed,
             pid_low=self.roll_low,
             pid=self.roll,
             trim_controller=self.trim_controller_cap_plane
             )
 
-        # Compute pitch command
-        cmd_p = self.compute_axis_command(
-            error.y,
+        cmd_pitch = self.compute_axis_command(
+            error.x,
             time_elapsed,
             pid_low=self.pitch_low,
             pid=self.pitch,
             trim_controller=self.trim_controller_cap_plane
             )
-        # Compute yaw command
-        cmd_y = 1500 + cmd_yaw_velocity
 
-        cmd_t = self.compute_axis_command(
-            error.z,
-            time_elapsed,
-            pid_low=None,
-            pid=self.throttle,
-            trim_controller=self.trim_controller_cap_throttle
-        )
-        return [cmd_r, cmd_p, cmd_y, cmd_t]
+        cmd_yaw = 1500 + cmd_yaw_velocity
 
-    def compute_axis_command(self, error : float, time_elapsed : float, pid : PIDaxis, pid_low : Optional[PIDaxis] = None, trim_controller : float = 5):
+        # HACK: the PID computes the error internally, this works better for the derivative term
+        cmd_thrust = self.thrust(self.thrust.setpoint-error.z)
+        
+        # TODO: verify that the convention is consistent
+        q = tiny_tf.transformations.quaternion_from_euler(cmd_roll, cmd_pitch, cmd_yaw)
+
+        return np.quaternion(q), cmd_thrust,
+
+    def compute_axis_command(
+        self,
+        error: float,
+        time_elapsed: float,
+        pid: PIDaxis,
+        pid_low: Optional[PIDaxis] = None,
+        trim_controller: float = 5,
+    ) -> float:
         if pid_low is None:
-            cmd_r = pid.step(error, time_elapsed)
-            return cmd_r
+            cmd = pid.step(error, time_elapsed)
+            return cmd
 
         if abs(error) < self.trim_controller_thresh_plane:
             # pass the high rate i term off to the low rate pid
             pid_low.integral += pid.integral
             pid.integral = 0
             # set the roll value to just the output of the low rate pid
-            cmd_r = pid_low.step(error, time_elapsed)
+            cmd = pid_low.step(error, time_elapsed)
         else:
             if error > trim_controller:
                 pid_low.step(trim_controller, time_elapsed)
@@ -230,6 +256,7 @@ class PID:
                 pid_low.step(-trim_controller, time_elapsed)
             else:
                 pid_low.step(error, time_elapsed)
-            cmd_r = pid_low.integral + pid.step(error, time_elapsed)
+            # cmd = pid_low.integral + pid.step(error, time_elapsed)
+            cmd = pid.step(error, time_elapsed)
         
-        return cmd_r
+        return cmd

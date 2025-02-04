@@ -5,7 +5,7 @@ from sensor_msgs.msg import Imu, Range
 from geometry_msgs.msg import PoseStamped
 from nav_msgs.msg import Odometry
 from .state_estimator_abs import StateEstimatorAbs
-
+from tf.transformations import euler_from_quaternion
 
 class StateEstimatorEMA(StateEstimatorAbs):
     """A class for filtering data using an Exponential Moving Average (EMA)"""
@@ -21,6 +21,20 @@ class StateEstimatorEMA(StateEstimatorAbs):
         # Initialize the estimator
         self.initialize_estimator()
 
+    @property
+    def rpy(self):
+        """
+        Get the roll, pitch, and yaw angles from the state. [radians]
+        """
+        return euler_from_quaternion(
+            [
+                self.state.pose.pose.orientation.x,
+                self.state.pose.pose.orientation.y,
+                self.state.pose.pose.orientation.z,
+                self.state.pose.pose.orientation.w,
+            ]
+        )
+
     def initialize_estimator(self):
         """ Initialize the EMA estimator parameters. """
         # Any additional initialization can be added here
@@ -33,11 +47,11 @@ class StateEstimatorEMA(StateEstimatorAbs):
 
     def process_pose(self, pose : PoseStamped):
         """ Filter the pose data using an EMA filter """
-        last_position = self.state.pose.pose.position
+        previous_position = self.state.pose.pose.position
         position_reading = pose.pose.position
 
-        smoothed_x = (1.0 - self.alpha_pose) * last_position.x + self.alpha_pose * position_reading.x
-        smoothed_y = (1.0 - self.alpha_pose) * last_position.y + self.alpha_pose * position_reading.y
+        smoothed_x = (1.0 - self.alpha_pose) * previous_position.x + self.alpha_pose * position_reading.x
+        smoothed_y = (1.0 - self.alpha_pose) * previous_position.y + self.alpha_pose * position_reading.y
 
         self.state.pose.pose.position.x = smoothed_x
         self.state.pose.pose.position.y = smoothed_y
@@ -56,7 +70,8 @@ class StateEstimatorEMA(StateEstimatorAbs):
 
     def process_range(self, range_reading : Range):
         """ Filter the range data using an EMA filter """
-        r, p, _ = self.get_r_p_y()
+        r, p, _ = self.rpy
+
         curr_altitude = range_reading.range * cos(r) * cos(p)
         prev_altitude = self.state.pose.pose.position.z
 
@@ -77,12 +92,9 @@ class StateEstimatorEMA(StateEstimatorAbs):
         """ Helper function to zero out small values for numerical stability. """
         return value if abs(value) > epsilon else 0.0
 
-    @staticmethod
-    def get_r_p_y():
-        # TODO: implement this method so that we can drop the altitude node
-        """ Extract roll, pitch, yaw from the current state (dummy implementation). """
-        # This method would need to be implemented to extract the correct roll, pitch, and yaw values
-        return 0.0, 0.0, 0.0
-
     def process_imu(self, imu_data: Imu):
-        return super().process_imu(imu_data)
+        """
+        The IMU data is transformed into Euler angles and stored in the state.
+        """
+        super().process_imu(imu_data)
+        self.state.pose.pose.orientation = imu_data.orientation
